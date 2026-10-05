@@ -20,6 +20,15 @@ export function getManualWatched(profileId: string, path: string): boolean | und
   return path in manual ? manual[path] : undefined;
 }
 
+/** True only when the user explicitly marked the item watched (not auto-detected from progress). */
+export function isManuallyMarkedWatched(
+  profileId: string | null | undefined,
+  path: string,
+): boolean {
+  if (!profileId) return false;
+  return getManualWatched(profileId, path) === true;
+}
+
 export function setManualWatched(profileId: string, path: string, value: boolean | null): void {
   const manual = loadManual(profileId);
   if (value === null) {
@@ -115,6 +124,40 @@ export function isPartiallyWatched(
 
   if (isWatched(item, progresses, profileId)) return false;
   return hasPartialProgress(item.path, item.duration, progresses);
+}
+
+export function isSeasonWatched(
+  episodes: LocalFile[],
+  progresses: Record<string, number>,
+  profileId: string | null | undefined,
+): boolean {
+  if (!profileId || episodes.length === 0) return false;
+
+  const withDuration = episodes.filter((ep) => ep.duration && ep.duration > 0);
+  const pool = withDuration.length > 0 ? withDuration : episodes;
+
+  return pool.every((ep) => isWatched(ep, progresses, profileId));
+}
+
+export function setEpisodesWatched(
+  profileId: string,
+  episodes: LocalFile[],
+  watched: boolean | null,
+): void {
+  for (const ep of episodes) {
+    setManualWatched(profileId, ep.path, watched);
+  }
+}
+
+export function setSeriesWatched(
+  profileId: string,
+  folder: LocalFile,
+  watched: boolean | null,
+): void {
+  setManualWatched(profileId, folder.path, watched);
+  if (folder.folderFiles) {
+    setEpisodesWatched(profileId, folder.folderFiles, watched);
+  }
 }
 
 export function pruneWatchedManual(profileId: string, removedPaths: Set<string>): void {

@@ -5,7 +5,7 @@ import type { Settings } from './SettingsModal';
 import { getEpisodeDisplayTitle } from '../utils/metadata';
 import {
   getTMDBEpisodeMeta,
-  parseSeasonEpisode,
+  resolveEpisodeNumbers,
   type TMDBEpisodeMeta,
 } from '../utils/tmdb';
 import { WatchedEyeIndicator } from './WatchedEyeIndicator';
@@ -80,18 +80,20 @@ export function EpisodeRow({
 }) {
   const [synopsis, setSynopsis] = useState<string | null>(episodeMeta?.synopsis ?? null);
   const [tmdbEpisodeName, setTmdbEpisodeName] = useState<string | null>(episodeMeta?.name ?? null);
+  const [tmdbStillUrl, setTmdbStillUrl] = useState<string | null>(episodeMeta?.stillUrl ?? null);
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     if (episodeMeta) {
       setSynopsis(episodeMeta.synopsis);
       setTmdbEpisodeName(episodeMeta.name);
+      setTmdbStillUrl(episodeMeta.stillUrl);
       return;
     }
 
     if (!seriesTvId) return;
 
-    const parsed = parseSeasonEpisode(ep.name) || parseSeasonEpisode(ep.relativePath || '');
+    const parsed = resolveEpisodeNumbers(ep.name, ep.relativePath);
     if (!parsed) return;
 
     let cancelled = false;
@@ -99,6 +101,7 @@ export function EpisodeRow({
       if (cancelled || !res) return;
       if (res.synopsis) setSynopsis(res.synopsis);
       if (res.name) setTmdbEpisodeName(res.name);
+      if (res.stillUrl) setTmdbStillUrl(res.stillUrl);
     });
 
     return () => {
@@ -109,7 +112,7 @@ export function EpisodeRow({
   const description = synopsis || ep.meta?.description || 'A video file from your local library.';
   const thumbSrc = forceSeriesThumbnail
     ? seriesThumbnail
-    : ep.thumbnail || ep.localFanart || ep.localPoster || seriesThumbnail;
+    : tmdbStillUrl || ep.thumbnail || ep.localFanart || ep.localPoster || seriesThumbnail;
 
   return (
     <div

@@ -68,10 +68,27 @@ class PlayerWindows {
     };
   }
 
+  applyPlayerFullscreen(isFullscreen) {
+    if (!this.isOpen()) return;
+    if (isFullscreen) {
+      // The player window receives focus when pausing/scrubbing. If only mainWindow
+      // is fullscreen, Windows treats the focused player as windowed and shows the
+      // taskbar — so both windows must enter fullscreen together.
+      if (!this.playerWindow.isFullScreen()) {
+        this.playerWindow.setFullScreen(true);
+      }
+    } else if (this.playerWindow.isFullScreen()) {
+      this.playerWindow.setFullScreen(false);
+      this.playerWindow.setBounds(this.getTargetBounds());
+    } else {
+      this.playerWindow.setBounds(this.getTargetBounds());
+    }
+    this.playerWindow.webContents.send('player-fullscreen', isFullscreen);
+  }
+
   syncBounds() {
     if (!this.isOpen() || this.mainWindow.isDestroyed()) return;
-    this.playerWindow.setBounds(this.getTargetBounds());
-    this.playerWindow.webContents.send('player-fullscreen', this.mainWindow.isFullScreen());
+    this.applyPlayerFullscreen(this.mainWindow.isFullScreen());
   }
 
   handleMinimize() {
@@ -82,7 +99,9 @@ class PlayerWindows {
     if (!this.isOpen()) return;
     this.syncBounds();
     this.playerWindow.show();
-    this.playerWindow.focus();
+    if (!this.mainWindow.isFullScreen()) {
+      this.playerWindow.focus();
+    }
   }
 
   /**
@@ -113,6 +132,7 @@ class PlayerWindows {
       movable: false,
       minimizable: false,
       maximizable: false,
+      fullscreenable: true,
       // focusable: false would force skipTaskbar on, hiding it from pickers.
       focusable: true,
       skipTaskbar: false,
@@ -180,6 +200,7 @@ class PlayerWindows {
   setFullscreen(fullscreen) {
     if (this.mainWindow.isDestroyed()) return false;
     this.mainWindow.setFullScreen(fullscreen);
+    this.applyPlayerFullscreen(fullscreen);
     return fullscreen;
   }
 
@@ -200,6 +221,7 @@ class PlayerWindows {
     const player = this.playerWindow;
     this.playerWindow = null;
     if (player && !player.isDestroyed()) {
+      if (player.isFullScreen()) player.setFullScreen(false);
       player.removeAllListeners('closed');
       player.destroy();
     }

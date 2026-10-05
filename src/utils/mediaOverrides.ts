@@ -5,6 +5,7 @@ export interface MediaOverride {
   description?: string;
   genre?: string;
   year?: string;
+  tmdbId?: string;
   disableTmdb?: boolean;
   useSeriesThumbnailForEpisodes?: boolean;
 }
@@ -26,7 +27,12 @@ export function getMediaOverride(path: string): MediaOverride | undefined {
 
 export function saveMediaOverride(path: string, override: MediaOverride): void {
   const all = loadAll();
-  all[path] = { ...all[path], ...override };
+  const merged = { ...all[path], ...override };
+  if ('tmdbId' in override) {
+    if (override.tmdbId) merged.tmdbId = override.tmdbId;
+    else delete merged.tmdbId;
+  }
+  all[path] = merged;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
 }
 

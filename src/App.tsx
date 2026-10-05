@@ -178,6 +178,7 @@ export default function App() {
   const handleUpdateVideo = (path: string, override: MediaOverride) => {
     saveMediaOverride(path, override);
     setOverrideTick((t) => t + 1);
+    if ('tmdbId' in override) setTmdbCacheTick((t) => t + 1);
     setFiles((prev) => prev.map((f) => (f.path === path ? applyMediaOverride(f) : f)));
     setInfoVideo((prev) => (prev?.path === path ? applyMediaOverride(prev) : prev));
   };

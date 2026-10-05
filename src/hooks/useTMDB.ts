@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LocalFile } from '../components/NetflixUI';
-import { isTmdbDisabled } from '../utils/mediaOverrides';
+import { getMediaOverride, isTmdbDisabled } from '../utils/mediaOverrides';
 import {
   getCachedForVideo,
   getTMDBMetadataForVideo,
@@ -37,7 +37,7 @@ export function useTMDB(video: LocalFile | null | undefined): TMDBResult | null 
     return () => {
       cancelled = true;
     };
-  }, [video?.path, video?.name, video?.category, video?.isFolder, video?.relativePath, video?.meta?.title, video?.meta?.year, video?.tmdbDisabled, disabled]);
+  }, [video?.path, video?.name, video?.category, video?.isFolder, video?.relativePath, video?.meta?.title, video?.meta?.year, video?.tmdbDisabled, getMediaOverride(video?.path ?? '')?.tmdbId, disabled]);
 
   return tmdb;
 }

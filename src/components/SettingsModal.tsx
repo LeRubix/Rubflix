@@ -169,10 +169,11 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-[#181818] w-[920px] h-[680px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] rounded-xl shadow-2xl border border-gray-800 flex overflow-hidden">
+    <div className="fixed inset-0 z-[200] bg-black/80 overflow-y-auto p-4">
+      <div className="mx-auto flex min-h-full w-full max-w-[920px] items-center justify-center py-2">
+      <div className="bg-[#181818] w-full max-h-[calc(100vh-2rem)] rounded-xl shadow-2xl border border-gray-800 flex flex-col md:flex-row overflow-hidden min-h-0">
         {/* Sidebar Tabs */}
-        <div className="w-1/3 bg-[#111] p-6 border-r border-gray-800 flex flex-col gap-2 shrink-0 overflow-y-auto">
+        <div className="w-full md:w-1/3 bg-[#111] p-4 md:p-6 border-b md:border-b-0 md:border-r border-gray-800 flex flex-col gap-2 shrink-0 overflow-y-auto max-h-[40vh] md:max-h-none min-h-0">
           <h2 className="text-xl font-bold mb-6 text-white px-2">Settings</h2>
           
           <button 
@@ -208,15 +209,18 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
         </div>
 
         {/* Content Area */}
-        <div className="w-2/3 flex flex-col min-h-0 min-w-0 relative">
-          <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 z-10 text-gray-400 hover:text-white transition"
-          >
-            <X className="w-6 h-6" />
-          </button>
+        <div className="w-full md:w-2/3 flex flex-col min-h-0 min-w-0 flex-1">
+          <div className="shrink-0 flex justify-end px-4 pt-4 pb-2 border-b border-gray-800/60 md:border-b-0 md:pb-0">
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition p-1 rounded-lg hover:bg-white/10"
+              aria-label="Close settings"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
 
-          <div className="flex-1 overflow-y-auto p-8 min-h-0">
+          <div className="flex-1 overflow-y-auto px-8 pb-8 pt-4 md:pt-2 min-h-0">
           {activeTab === 'general' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
               <h3 className="text-xl font-bold text-white mb-6">General Settings</h3>
@@ -792,6 +796,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

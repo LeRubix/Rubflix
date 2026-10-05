@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Plus, ChevronLeft, ChevronRight, X, Edit2, Save, Shuffle, FolderOpen } from 'lucide-react';
+import { Play, Plus, ChevronLeft, ChevronRight, X, Edit2, Save, Shuffle, FolderOpen, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   formatTmdbGenres,
   getCachedEpisodeMeta,
   onTmdbEpisodeRetry,
-  parseSeasonEpisode,
+  resolveEpisodeNumbers,
+  getSeasonGroupKey,
   prefetchEpisodeMetaBatch,
   scheduleTmdbRetries,
   tmdbArtwork,
@@ -26,8 +27,11 @@ import { formatDurationShort } from '../utils/subtitles';
 import {
   isWatched,
   isSeriesWatched,
+  isSeasonWatched,
   hasUnwatchedEpisode,
   setManualWatched,
+  setSeriesWatched,
+  setEpisodesWatched,
 } from '../utils/watched';
 
 // --- Types ---
@@ -282,6 +286,37 @@ export function GridViewModal({
   );
 }
 
+function EditToggle({
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div
+      className="flex items-start gap-2.5 bg-gray-800/30 p-3 rounded-lg border border-gray-800 cursor-pointer hover:bg-gray-800/50 transition h-full"
+      onClick={() => onChange(!checked)}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="w-4 h-4 mt-0.5 accent-accent flex-shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <div className="flex-grow min-w-0">
+        <span className="text-sm font-semibold text-white block leading-snug">{title}</span>
+        {description && <span className="text-xs text-gray-500 block mt-0.5 leading-snug">{description}</span>}
+      </div>
+    </div>
+  );
+}
+
 // --- Detail Modal ---
 export function DetailModal({
   video,
@@ -314,9 +349,11 @@ export function DetailModal({
     description: video.meta?.description || '',
     genre: video.meta?.genre || '',
     year: video.meta?.year || '',
+    tmdbId: getMediaOverride(video.path)?.tmdbId ?? '',
     disableTmdb: getMediaOverride(video.path)?.disableTmdb ?? false,
     useSeriesThumbnailForEpisodes: getMediaOverride(video.path)?.useSeriesThumbnailForEpisodes ?? false,
   });
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     setEditForm({
@@ -324,18 +361,27 @@ export function DetailModal({
       description: video.meta?.description || '',
       genre: video.meta?.genre || '',
       year: video.meta?.year || '',
+      tmdbId: getMediaOverride(video.path)?.tmdbId ?? '',
       disableTmdb: getMediaOverride(video.path)?.disableTmdb ?? false,
       useSeriesThumbnailForEpisodes: getMediaOverride(video.path)?.useSeriesThumbnailForEpisodes ?? false,
     });
+    setEditError(null);
     setIsEditing(false);
   }, [video.path, video.meta?.title, video.meta?.description, video.meta?.genre, video.meta?.year, video.name, video.tmdbDisabled]);
 
   const handleSaveEdits = () => {
+    const trimmedTmdbId = editForm.tmdbId.trim();
+    if (trimmedTmdbId && !/^\d+$/.test(trimmedTmdbId)) {
+      setEditError('TMDB ID must be a number.');
+      return;
+    }
+    setEditError(null);
     const override: MediaOverride = {
       title: editForm.title.trim() || undefined,
       description: editForm.description.trim() || undefined,
       genre: editForm.genre.trim() || undefined,
       year: editForm.year.trim() || undefined,
+      tmdbId: trimmedTmdbId,
       disableTmdb: editForm.disableTmdb,
       useSeriesThumbnailForEpisodes: video.isFolder ? editForm.useSeriesThumbnailForEpisodes : undefined,
     };
@@ -359,6 +405,20 @@ export function DetailModal({
     onWatchedChange?.();
   };
 
+  const toggleSeriesWatched = (checked: boolean) => {
+    if (!activeProfileId || !video.isFolder) return;
+    setSeriesWatched(activeProfileId, video, checked ? true : null);
+    onWatchedChange?.();
+  };
+
+  const toggleSeasonWatched = (checked: boolean) => {
+    if (!activeProfileId || !video.isFolder) return;
+    const seasonEps = subfolders[selectedSubfolder] ?? [];
+    setEpisodesWatched(activeProfileId, seasonEps, checked ? true : null);
+    if (!checked) setManualWatched(activeProfileId, video.path, null);
+    onWatchedChange?.();
+  };
+
   const forceSeriesThumbnail = getMediaOverride(video.path)?.useSeriesThumbnailForEpisodes;
 
   useEffect(() => {
@@ -367,16 +427,13 @@ export function DetailModal({
   }, []);
 
   const [selectedSubfolder, setSelectedSubfolder] = useState<string>('');
+  const [hideWatchedEpisodes, setHideWatchedEpisodes] = useState(false);
 
   const subfolders = useMemo(() => {
     if (!video.isFolder || !video.folderFiles) return {};
     const groups: Record<string, LocalFile[]> = {};
     video.folderFiles.forEach(f => {
-      const parts = f.relativePath ? f.relativePath.split('/') : [];
-      let sub = 'Episodes';
-      if (parts.length > 2) {
-        sub = parts[1];
-      }
+      const sub = getSeasonGroupKey(f.relativePath);
       if (!groups[sub]) groups[sub] = [];
       groups[sub].push(f);
     });
@@ -392,7 +449,28 @@ export function DetailModal({
   }, [subfolderNames, selectedSubfolder]);
 
   const episodesToRender = subfolders[selectedSubfolder] || [];
+  const visibleEpisodes = hideWatchedEpisodes
+    ? episodesToRender.filter((ep) => !isWatched(ep, progresses, activeProfileId))
+    : episodesToRender;
   const episodePathsKey = episodesToRender.map((ep) => ep.path).join('\0');
+
+  useEffect(() => {
+    setHideWatchedEpisodes(false);
+  }, [video.path, selectedSubfolder]);
+
+  const seriesWatched = Boolean(
+    video.isFolder && activeProfileId && isSeriesWatched(video, progresses, activeProfileId),
+  );
+  const seasonWatched = Boolean(
+    video.isFolder && activeProfileId && isSeasonWatched(episodesToRender, progresses, activeProfileId),
+  );
+
+  const folderPlayTarget = (() => {
+    if (!video.isFolder || !video.folderFiles?.length) return null;
+    if (hideWatchedEpisodes && visibleEpisodes[0]) return visibleEpisodes[0];
+    const unwatched = episodesToRender.find((ep) => !isWatched(ep, progresses, activeProfileId));
+    return unwatched ?? episodesToRender[0] ?? video.folderFiles[0];
+  })();
   const episodeCount = video.folderFiles?.length ?? 0;
   const heroArtwork = useLocalOnly ? tmdbArtwork(null, video) : tmdbArtwork(tmdb, video);
   const totalRuntime = video.folderFiles?.reduce((sum, ep) => sum + (ep.duration ?? 0), 0) ?? 0;
@@ -425,7 +503,7 @@ export function DetailModal({
 
     const parsedEpisodes = episodesToRender
       .map((ep) => {
-        const parsed = parseSeasonEpisode(ep.name) || parseSeasonEpisode(ep.relativePath || '');
+        const parsed = resolveEpisodeNumbers(ep.name, ep.relativePath);
         return parsed ? { ep, parsed } : null;
       })
       .filter((item): item is { ep: LocalFile; parsed: { season: number; episode: number } } => item !== null);
@@ -510,7 +588,7 @@ export function DetailModal({
                 <button 
                   onClick={() => {
                     if (video.isFolder && video.folderFiles && video.folderFiles.length > 0) {
-                      onPlay(episodesToRender[0] || video.folderFiles[0]);
+                      onPlay(folderPlayTarget || video.folderFiles[0]);
                     } else {
                       onPlay(video);
                     }
@@ -591,39 +669,58 @@ export function DetailModal({
                       />
                     </div>
                   </div>
-                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 block mb-1">TMDB ID</label>
                     <input
-                      type="checkbox"
-                      checked={editForm.disableTmdb}
-                      onChange={(e) => setEditForm({ ...editForm, disableTmdb: e.target.checked })}
-                      className="w-4 h-4 rounded border-gray-600 bg-black/50 accent-accent"
+                      type="text"
+                      value={editForm.tmdbId}
+                      onChange={(e) => setEditForm({ ...editForm, tmdbId: e.target.value })}
+                      placeholder={video.isFolder ? 'TV show ID from themoviedb.org' : 'Movie ID from themoviedb.org'}
+                      className="w-full bg-black/50 border border-gray-600 rounded-lg px-4 py-2 text-white outline-none focus:border-white transition"
                     />
-                    <span className="text-sm text-gray-300">
-                      Use local info only <span className="text-gray-500">(disable TMDB metadata)</span>
-                    </span>
-                  </label>
-                  {video.isFolder && (
-                    <label className="flex items-center gap-3 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
+                    <p className="text-xs text-gray-500 mt-1">
+                      Optional. When set, metadata is fetched by ID instead of title search. Find it on{' '}
+                      <a href="https://www.themoviedb.org" className="text-gray-400 hover:text-white underline" target="_blank" rel="noreferrer">themoviedb.org</a>.
+                    </p>
+                  </div>
+                  {editError && <p className="text-xs text-red-400">{editError}</p>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <EditToggle
+                      checked={editForm.disableTmdb}
+                      onChange={(checked) => setEditForm({ ...editForm, disableTmdb: checked })}
+                      title="Use local info only"
+                      description="Disable TMDB metadata lookup for this title"
+                    />
+                    {video.isFolder && (
+                      <EditToggle
                         checked={editForm.useSeriesThumbnailForEpisodes}
-                        onChange={(e) => setEditForm({ ...editForm, useSeriesThumbnailForEpisodes: e.target.checked })}
-                        className="w-4 h-4 rounded border-gray-600 bg-black/50 accent-accent"
+                        onChange={(checked) => setEditForm({ ...editForm, useSeriesThumbnailForEpisodes: checked })}
+                        title="Use series thumbnail for all episodes"
                       />
-                      <span className="text-sm text-gray-300">Use series thumbnail for all episodes</span>
-                    </label>
-                  )}
-                  {!video.isFolder && activeProfileId && (
-                    <label className="flex items-center gap-3 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
+                    )}
+                    {!video.isFolder && activeProfileId && (
+                      <EditToggle
                         checked={movieWatched}
-                        onChange={(e) => toggleMovieWatched(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-600 bg-black/50 accent-accent"
+                        onChange={toggleMovieWatched}
+                        title="Mark as watched"
                       />
-                      <span className="text-sm text-gray-300">Mark as watched</span>
-                    </label>
-                  )}
+                    )}
+                    {video.isFolder && activeProfileId && (
+                      <EditToggle
+                        checked={seriesWatched}
+                        onChange={toggleSeriesWatched}
+                        title="Mark entire show as watched"
+                      />
+                    )}
+                    {video.isFolder && activeProfileId && subfolderNames.length > 1 && (
+                      <EditToggle
+                        checked={seasonWatched}
+                        onChange={toggleSeasonWatched}
+                        title="Mark season as watched"
+                        description={selectedSubfolder}
+                      />
+                    )}
+                  </div>
                   <button
                     onClick={handleSaveEdits}
                     className="flex items-center gap-2 bg-accent text-white px-6 py-2 rounded font-bold hover:opacity-90 transition"
@@ -639,23 +736,44 @@ export function DetailModal({
 
               {video.isFolder && subfolderNames.length > 0 && (
                 <div className="mt-8 border-t border-gray-800 pt-8">
-                  <div className="flex justify-between items-center mb-6">
+                  <div className="flex justify-between items-center mb-6 gap-3 flex-wrap">
                     <h3 className="text-2xl font-bold text-white">Episodes</h3>
-                    {subfolderNames.length > 1 && (
-                      <select 
-                        value={selectedSubfolder}
-                        onChange={(e) => setSelectedSubfolder(e.target.value)}
-                        className="bg-[#242424] text-white border border-gray-600 rounded px-4 py-2 font-semibold outline-none focus:border-white transition"
-                      >
-                        {subfolderNames.map(name => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
-                    )}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {!isEditing && (
+                        <button
+                          type="button"
+                          onClick={() => setHideWatchedEpisodes((h) => !h)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded font-semibold text-sm transition border ${
+                            hideWatchedEpisodes
+                              ? 'bg-accent/20 border-accent text-white'
+                              : 'bg-[#242424] border-gray-600 text-gray-300 hover:border-gray-500'
+                          }`}
+                        >
+                          {hideWatchedEpisodes ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {hideWatchedEpisodes ? 'Show all' : 'Hide watched'}
+                        </button>
+                      )}
+                      {subfolderNames.length > 1 && (
+                        <select 
+                          value={selectedSubfolder}
+                          onChange={(e) => setSelectedSubfolder(e.target.value)}
+                          className="bg-[#242424] text-white border border-gray-600 rounded px-4 py-2 font-semibold outline-none focus:border-white transition"
+                        >
+                          {subfolderNames.map(name => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                   
                     <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                      {episodesToRender.map((ep, i) => (
+                      {visibleEpisodes.length === 0 && hideWatchedEpisodes ? (
+                        <p className="text-sm text-gray-500 py-4">
+                          All watched episodes in this season are hidden.
+                        </p>
+                      ) : null}
+                      {visibleEpisodes.map((ep, i) => (
                         <EpisodeRow
                           key={ep.path}
                           ep={ep}
@@ -1052,7 +1170,7 @@ export function ContentRow({
   return (
     <div className="mb-8 relative group z-20 hover:z-50">
       <div
-        className={`relative z-30 flex items-center gap-2 mb-2 px-10 py-2 w-full ${expandable ? 'cursor-pointer' : ''}`}
+        className={`relative z-10 flex items-center gap-2 mb-2 px-10 py-2 w-full ${expandable ? 'cursor-pointer' : ''}`}
         onMouseEnter={() => setTitleHovered(true)}
         onMouseLeave={() => setTitleHovered(false)}
         onClick={() => expandable && setShowGrid(true)}

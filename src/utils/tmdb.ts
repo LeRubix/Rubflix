@@ -1,15 +1,18 @@
 import type { LocalFile } from '../components/NetflixUI';
+import { resolveEpisodeNumbers } from './episodeParsing';
 import { cleanTitle, parseSeriesFolderName } from './metadata';
-import { isTmdbDisabled } from './mediaOverrides';
+import { getMediaOverride, isTmdbDisabled } from './mediaOverrides';
 import { runWithConcurrency } from './concurrency';
 import { getActiveTmdbApiKey } from './settings';
 
 const CACHE_KEY = 'tmdb_metadata_cache_v6';
-const EP_CACHE_KEY = 'tmdb_episodes_cache_v2';
+const EP_CACHE_KEY = 'tmdb_episodes_cache_v3';
+const SEASON_BULK_CACHE_KEY = 'tmdb_season_bulk_cache_v1';
 
 export interface TMDBEpisodeMeta {
   name: string | null;
   synopsis: string | null;
+  stillUrl: string | null;
 }
 
 /** TMDB allows ~40 requests per 10 seconds */
@@ -40,11 +43,13 @@ export interface TMDBLookupOptions {
   title: string;
   year?: string;
   mediaType?: 'movie' | 'tv';
+  tmdbId?: number;
 }
 
 const inflight = new Map<string, Promise<TMDBResult | null>>();
 const detailsInflight = new Map<string, Promise<TMDBResult | null>>();
 const episodeInflight = new Map<string, Promise<TMDBEpisodeMeta | null>>();
+const seasonInflight = new Map<string, Promise<void>>();
 const episodeRetryQueue: { tvId: number; season: number; episode: number }[] = [];
 const retryListeners = new Set<() => void>();
 const rateTimestamps: number[] = [];
@@ -110,10 +115,27 @@ export function episodeCacheKey(tvId: number, season: number, episode: number): 
   return `${tvId}_S${season}E${episode}`;
 }
 
+function seasonCacheKey(tvId: number, season: number): string {
+  return `${tvId}_season_${season}`;
+}
+
+function tmdbStillUrl(stillPath: string | null | undefined): string | null {
+  return stillPath ? `https://image.tmdb.org/t/p/w300${stillPath}` : null;
+}
+
+function mapEpisodeMeta(data: { name?: string; overview?: string; still_path?: string | null }): TMDBEpisodeMeta {
+  return {
+    name: data.name || null,
+    synopsis: data.overview || null,
+    stillUrl: tmdbStillUrl(data.still_path),
+  };
+}
+
 export function clearTmdbCaches(): void {
   try {
     localStorage.removeItem(CACHE_KEY);
     localStorage.removeItem(EP_CACHE_KEY);
+    localStorage.removeItem(SEASON_BULK_CACHE_KEY);
   } catch {
     // ignore
   }
@@ -127,12 +149,26 @@ export function invalidateTmdbSession(): void {
 }
 
 export function cacheKey(opts: TMDBLookupOptions): string {
+  if (opts.tmdbId) {
+    const type = opts.mediaType ?? 'any';
+    return `id:${type}:${opts.tmdbId}`;
+  }
   const type = opts.mediaType ?? 'any';
   const year = opts.year?.trim() || '';
   return `${type}:${year}:${opts.title.toLowerCase()}`;
 }
 
 export function getTMDBLookupOptions(video: LocalFile): TMDBLookupOptions {
+  const overrideId = getMediaOverride(video.path)?.tmdbId?.trim();
+  const parsedId = overrideId ? Number.parseInt(overrideId, 10) : NaN;
+  if (Number.isFinite(parsedId) && parsedId > 0) {
+    return {
+      tmdbId: parsedId,
+      title: '',
+      mediaType: video.isFolder || video.category === 'tv' ? 'tv' : 'movie',
+    };
+  }
+
   if (video.isFolder) {
     const root = video.name || video.relativePath?.split('/')[0] || video.meta?.title || '';
     const { title, year } = parseSeriesFolderName(root);
@@ -213,7 +249,8 @@ export async function getTMDBMetadata(opts: TMDBLookupOptions | string): Promise
   const lookup: TMDBLookupOptions =
     typeof opts === 'string' ? { title: opts } : opts;
 
-  if (!lookup.title.trim() || !hasTmdbApiKey()) return null;
+  if (!hasTmdbApiKey()) return null;
+  if (!lookup.tmdbId && !lookup.title.trim()) return null;
 
   if (!navigator.onLine) {
     const cached = getCachedLookup(lookup);
@@ -236,6 +273,21 @@ export async function getTMDBMetadata(opts: TMDBLookupOptions | string): Promise
   }
 }
 
+async function fetchTMDBById(id: number, mediaType: 'movie' | 'tv'): Promise<TMDBResult | null> {
+  await waitForRateSlot();
+  const key = apiKey();
+  const url =
+    mediaType === 'movie'
+      ? `https://api.themoviedb.org/3/movie/${id}?api_key=${key}&language=en-US`
+      : `https://api.themoviedb.org/3/tv/${id}?api_key=${key}&language=en-US`;
+  const res = await fetch(url);
+  checkTransientResponse(res);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data?.id) return null;
+  return mapResult(data, mediaType);
+}
+
 async function fetchAndCache(
   lookup: TMDBLookupOptions,
   key: string,
@@ -243,7 +295,10 @@ async function fetchAndCache(
 ): Promise<TMDBResult | null> {
   try {
     await waitForRateSlot();
-    const result = await searchTMDB(lookup);
+    const result =
+      lookup.tmdbId && lookup.mediaType
+        ? await fetchTMDBById(lookup.tmdbId, lookup.mediaType)
+        : await searchTMDB(lookup);
     cache[key] = result;
     saveCache(cache);
     return result;
@@ -603,6 +658,34 @@ function saveEpisodeCache(cache: Record<string, TMDBEpisodeMeta | null>) {
   }
 }
 
+function getSeasonBulkCache(): Record<string, true | null> {
+  try {
+    const data = localStorage.getItem(SEASON_BULK_CACHE_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSeasonBulkCache(cache: Record<string, true | null>) {
+  try {
+    localStorage.setItem(SEASON_BULK_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore
+  }
+}
+
+function isSeasonBulkFetched(tvId: number, season: number): boolean {
+  const key = seasonCacheKey(tvId, season);
+  return key in getSeasonBulkCache();
+}
+
+function markSeasonBulkFetched(tvId: number, season: number, ok: boolean) {
+  const cache = getSeasonBulkCache();
+  cache[seasonCacheKey(tvId, season)] = ok ? true : null;
+  saveSeasonBulkCache(cache);
+}
+
 export function getCachedEpisodeMeta(
   tvId: number,
   season: number,
@@ -612,6 +695,56 @@ export function getCachedEpisodeMeta(
   const cache = getEpisodeCache();
   if (key in cache) return cache[key];
   return undefined;
+}
+
+/**
+ * Fetches every episode in a season with one API call and fills the per-episode cache.
+ * Prefer this over individual episode requests when loading a season list.
+ */
+async function fetchSeasonEpisodeMeta(tvId: number, season: number): Promise<void> {
+  if (isSeasonBulkFetched(tvId, season)) return;
+
+  if (!navigator.onLine || !hasTmdbApiKey()) return;
+
+  try {
+    await waitForRateSlot();
+    const res = await fetch(
+      `https://api.themoviedb.org/3/tv/${tvId}/season/${season}?api_key=${apiKey()}&language=en-US`,
+    );
+    if (!res.ok) {
+      if (res.status === 404) markSeasonBulkFetched(tvId, season, false);
+      return;
+    }
+    const data = await res.json();
+    const cache = getEpisodeCache();
+    for (const ep of data.episodes ?? []) {
+      if (typeof ep.episode_number !== 'number') continue;
+      cache[episodeCacheKey(tvId, season, ep.episode_number)] = mapEpisodeMeta(ep);
+    }
+    saveEpisodeCache(cache);
+    markSeasonBulkFetched(tvId, season, true);
+  } catch {
+    // ignore — DetailModal retry will attempt again
+  }
+}
+
+async function ensureSeasonEpisodeMeta(tvId: number, season: number): Promise<void> {
+  if (isSeasonBulkFetched(tvId, season)) return;
+
+  const inflightKey = seasonCacheKey(tvId, season);
+  const pending = seasonInflight.get(inflightKey);
+  if (pending) {
+    await pending;
+    return;
+  }
+
+  const promise = fetchSeasonEpisodeMeta(tvId, season);
+  seasonInflight.set(inflightKey, promise);
+  try {
+    await promise;
+  } finally {
+    seasonInflight.delete(inflightKey);
+  }
 }
 
 async function fetchEpisodeMeta(
@@ -624,6 +757,10 @@ async function fetchEpisodeMeta(
   if (key in cache) return cache[key];
 
   if (!navigator.onLine || !hasTmdbApiKey()) return null;
+
+  // Try bulk season fetch first — one call covers every episode in the season.
+  await ensureSeasonEpisodeMeta(tvId, season);
+  if (key in getEpisodeCache()) return getEpisodeCache()[key];
 
   try {
     await waitForRateSlot();
@@ -642,10 +779,7 @@ async function fetchEpisodeMeta(
       return null;
     }
     const data = await res.json();
-    const meta: TMDBEpisodeMeta = {
-      name: data.name || null,
-      synopsis: data.overview || null,
-    };
+    const meta = mapEpisodeMeta(data);
     cache[key] = meta;
     saveEpisodeCache(cache);
     return meta;
@@ -683,15 +817,19 @@ export async function prefetchEpisodeMetaBatch(
 ): Promise<void> {
   if (!navigator.onLine || !hasTmdbApiKey() || episodes.length === 0) return;
 
-  const uncached = episodes.filter((ep) => {
-    return getCachedEpisodeMeta(tvId, ep.season, ep.episode) === undefined;
-  });
+  const seasonsNeeded = new Set<number>();
+  for (const ep of episodes.slice(0, limit)) {
+    if (getCachedEpisodeMeta(tvId, ep.season, ep.episode) === undefined) {
+      seasonsNeeded.add(ep.season);
+    }
+  }
 
-  const batch = uncached.slice(0, limit);
-  if (batch.length === 0) return;
+  if (seasonsNeeded.size === 0) return;
 
-  await runWithConcurrency(batch, PREFETCH_CONCURRENCY, async (ep) => {
-    await getTMDBEpisodeMeta(tvId, ep.season, ep.episode);
+  // One season endpoint call per season (includes stills for all episodes).
+  const seasons = [...seasonsNeeded].slice(0, 5);
+  await runWithConcurrency(seasons, PREFETCH_CONCURRENCY, async (season) => {
+    await ensureSeasonEpisodeMeta(tvId, season);
   });
 }
 
@@ -700,18 +838,12 @@ export async function getTMDBEpisode(tvId: number, season: number, episode: numb
   return meta?.synopsis ?? null;
 }
 
+/** @deprecated Prefer resolveEpisodeNumbers(name, relativePath) for TV files. */
 export function parseSeasonEpisode(filename: string): { season: number; episode: number } | null {
-  const m1 = filename.match(/s(\d+)\s*e(\d+)/i);
-  if (m1) return { season: parseInt(m1[1], 10), episode: parseInt(m1[2], 10) };
-
-  const m2 = filename.match(/season\s*(\d+)\s*episode\s*(\d+)/i);
-  if (m2) return { season: parseInt(m2[1], 10), episode: parseInt(m2[2], 10) };
-
-  const m3 = filename.match(/(?:^|\s)(\d+)x(\d+)(?:\s|$)/i);
-  if (m3) return { season: parseInt(m3[1], 10), episode: parseInt(m3[2], 10) };
-
-  return null;
+  return resolveEpisodeNumbers(filename);
 }
+
+export { resolveEpisodeNumbers, getSeasonGroupKey } from './episodeParsing';
 
 export function tmdbArtwork(
   tmdb: TMDBResult | null | undefined,

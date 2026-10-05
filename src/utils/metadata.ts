@@ -1,3 +1,5 @@
+import { resolveEpisodeNumbers } from './episodeParsing';
+
 export interface MovieMeta {
   title: string;
   poster: string | null;
@@ -188,6 +190,7 @@ export function getEpisodeDisplayTitle(
   ep: { name: string; meta?: { title?: string }; relativePath?: string },
   tmdbEpisodeName?: string | null,
 ): string {
+  const resolved = resolveEpisodeNumbers(ep.name, ep.relativePath);
   const parsed =
     parseEpisodeFilename(ep.name).season !== undefined
       ? parseEpisodeFilename(ep.name)
@@ -196,8 +199,11 @@ export function getEpisodeDisplayTitle(
   const localTitle = ep.meta?.title || ep.name;
   const label = tmdbEpisodeName || (parsed?.episodeTitle ?? localTitle);
 
-  if (parsed?.season != null && parsed?.episode != null) {
-    const code = `S${String(parsed.season).padStart(2, '0')}E${String(parsed.episode).padStart(2, '0')}`;
+  const season = resolved?.season ?? parsed?.season;
+  const episode = resolved?.episode ?? parsed?.episode;
+
+  if (season != null && episode != null) {
+    const code = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
     if (label.toLowerCase().startsWith('s') && /s\d+e\d/i.test(label)) return label;
     if (label === code) return code;
     return `${code} · ${label}`;

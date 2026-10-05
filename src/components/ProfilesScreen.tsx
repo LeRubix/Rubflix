@@ -235,7 +235,7 @@ export function ProfilesScreen({
               if (next && !nextDefault && profiles.length > 0) nextDefault = profiles[0].id;
               updateProfileSettings({ skipProfilePicker: next, defaultProfileId: nextDefault });
             }}
-            className="w-5 h-5 accent-[#fdbce6] flex-shrink-0"
+            className="w-5 h-5 accent-accent flex-shrink-0"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
