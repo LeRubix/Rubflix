@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Palette, Image as ImageIcon, Save, Type, Maximize, Settings as SettingsIcon, MonitorPlay, ShieldAlert, Check, User, Upload, Edit2, FolderOpen, Trash2 } from 'lucide-react';
+import { X, Palette, Image as ImageIcon, Save, Type, Maximize, Settings as SettingsIcon, MonitorPlay, ScreenShare, ShieldAlert, Check, User, Upload, Edit2, FolderOpen, Trash2 } from 'lucide-react';
 import type { Profile } from './ProfilesScreen';
 import {
   DEFAULT_TMDB_KEY_MASK,
@@ -740,6 +740,20 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="bg-gray-800/30 p-4 rounded-lg border border-gray-800">
+                <div className="flex items-center gap-3 mb-2">
+                  <ScreenShare className="w-5 h-5 text-accent" />
+                  <span className="text-sm font-bold text-white">Streaming to Discord or OBS</span>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Video is drawn in its own window, so sharing the main {settings.appName} window shows
+                  the library but not the media. To let viewers see what&rsquo;s playing, either share
+                  your whole screen, or pick the{' '}
+                  <span className="text-gray-200 font-semibold">{settings.appName} Player</span> window
+                  from the share menu once playback has started.
+                </p>
               </div>
 
               <div className="pt-6 border-t border-gray-800">

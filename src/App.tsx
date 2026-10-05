@@ -334,6 +334,7 @@ export default function App() {
       profileId: activeProfile,
       startTime,
       next: next ? { path: next.path, title: next.meta?.title || next.name, subtitle: episodeLabel(next) } : null,
+      appName: settings.appName,
     };
   };
 

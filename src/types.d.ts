@@ -37,6 +37,8 @@ declare global {
     profileId: string;
     startTime: number;
     next: { path: string; title: string; subtitle?: string; thumbnail?: string } | null;
+    /** Names the player window so it is recognisable in screen-share pickers. */
+    appName?: string;
   }
 
   interface PlayerExitPayload {

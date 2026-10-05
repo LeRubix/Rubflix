@@ -407,9 +407,9 @@ ipcMain.handle('player-start', async (event, session) => {
   const windows = getPlayerWindows();
   if (windows.isOpen()) {
     windows.sendToControls('player-session', session);
-    windows.controlsWindow?.focus();
+    windows.focusControls();
   } else {
-    windows.open();
+    windows.open({ appName: session?.appName });
   }
   return { ok: true };
 });
