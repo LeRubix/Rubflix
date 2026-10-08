@@ -36,6 +36,13 @@ export function saveMediaOverride(path: string, override: MediaOverride): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
 }
 
+export function clearMediaOverride(path: string): void {
+  const all = loadAll();
+  if (!(path in all)) return;
+  delete all[path];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+}
+
 export function isTmdbDisabled(video: Pick<LocalFile, 'path'> | null | undefined): boolean {
   if (!video) return false;
   return getMediaOverride(video.path)?.disableTmdb === true;

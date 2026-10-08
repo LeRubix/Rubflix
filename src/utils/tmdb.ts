@@ -1,6 +1,6 @@
 import type { LocalFile } from '../components/NetflixUI';
 import { resolveEpisodeNumbers } from './episodeParsing';
-import { cleanTitle, parseSeriesFolderName } from './metadata';
+import { basenameFromPath, cleanTitle, parseFilenameMeta, parseSeriesFolderName } from './metadata';
 import { getMediaOverride, isTmdbDisabled } from './mediaOverrides';
 import { runWithConcurrency } from './concurrency';
 import { getActiveTmdbApiKey } from './settings';
@@ -159,39 +159,79 @@ export function cacheKey(opts: TMDBLookupOptions): string {
 }
 
 export function getTMDBLookupOptions(video: LocalFile): TMDBLookupOptions {
-  const overrideId = getMediaOverride(video.path)?.tmdbId?.trim();
+  const override = getMediaOverride(video.path);
+  const mediaType: 'movie' | 'tv' =
+    video.isFolder || video.category === 'tv' ? 'tv' : 'movie';
+
+  const overrideId = override?.tmdbId?.trim();
   const parsedId = overrideId ? Number.parseInt(overrideId, 10) : NaN;
   if (Number.isFinite(parsedId) && parsedId > 0) {
-    return {
-      tmdbId: parsedId,
-      title: '',
-      mediaType: video.isFolder || video.category === 'tv' ? 'tv' : 'movie',
-    };
+    return { tmdbId: parsedId, title: '', mediaType };
   }
 
   if (video.isFolder) {
     const root = video.name || video.relativePath?.split('/')[0] || video.meta?.title || '';
     const { title, year } = parseSeriesFolderName(root);
-    return { title, year: year || video.meta?.year, mediaType: 'tv' };
+    const ovTitle = override?.title?.trim();
+    const ovYear = override?.year?.trim();
+    return {
+      title: ovTitle || title,
+      year: ovYear || year || video.meta?.year,
+      mediaType: 'tv',
+    };
   }
 
   if (video.relativePath && video.category === 'tv') {
     const root = video.relativePath.split('/')[0];
     const { title, year } = parseSeriesFolderName(root);
+    const ovTitle = override?.title?.trim();
+    const ovYear = override?.year?.trim();
     return {
-      title,
-      year: year || video.meta?.year,
+      title: ovTitle || title,
+      year: ovYear || year || video.meta?.year,
       mediaType: 'tv',
     };
   }
 
+  const ovTitle = override?.title?.trim();
+  const ovYear = override?.year?.trim();
+  if (ovTitle) {
+    return { title: ovTitle, year: ovYear || video.meta?.year?.trim() || undefined, mediaType };
+  }
+
+  if (video.path) {
+    const fromPath = parseFilenameMeta(basenameFromPath(video.path));
+    if (fromPath.title) {
+      return {
+        title: fromPath.title,
+        year: ovYear || fromPath.year || video.meta?.year?.trim() || undefined,
+        mediaType,
+      };
+    }
+  }
+
   const title = cleanTitle(video.meta?.title || video.name);
-  const year = video.meta?.year?.trim() || undefined;
-  return {
-    title,
-    year,
-    mediaType: video.category === 'tv' ? 'tv' : 'movie',
-  };
+  const year = ovYear || video.meta?.year?.trim() || undefined;
+  return { title, year, mediaType };
+}
+
+export function invalidateTmdbForVideo(
+  video: LocalFile,
+  previousLookup?: TMDBLookupOptions,
+): void {
+  const cache = getFullCache();
+  const keys = new Set<string>();
+  if (previousLookup) keys.add(cacheKey(previousLookup));
+  keys.add(cacheKey(getTMDBLookupOptions(video)));
+
+  let changed = false;
+  for (const key of keys) {
+    if (key in cache) {
+      delete cache[key];
+      changed = true;
+    }
+  }
+  if (changed) saveCache(cache);
 }
 
 export function getCachedLookup(opts: TMDBLookupOptions): TMDBResult | null | undefined {
@@ -452,6 +492,11 @@ function scoreSearchResult(
   const ry = getResultYear(item);
   if (queryYear && ry === queryYear) score += 40;
   if (queryYear && ry && ry !== queryYear) score -= 15;
+
+  const lastQueryToken = qWords[qWords.length - 1];
+  if (lastQueryToken && /^\d{2,4}$/.test(lastQueryToken) && t.includes(lastQueryToken)) {
+    score += 35;
+  }
 
   if (t !== q && t.endsWith(` ${q}`)) score -= 50;
   if (t !== q && t.includes(` ${q} `)) score -= 30;

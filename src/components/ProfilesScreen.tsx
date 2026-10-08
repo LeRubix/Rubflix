@@ -1,21 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Upload, User } from 'lucide-react';
-import { generateLocalAvatar } from '../utils/avatar';
+import {
+  DEFAULT_PROFILES,
+  normalizeStoredProfiles,
+  type Profile,
+} from '../utils/profiles';
+import { ProfileImageCropModal } from './ProfileImageCropModal';
+import { useProfileImageCropFlow } from '../hooks/useProfileImageCropFlow';
 
-export interface Profile {
-  id: string;
-  name: string;
-  color: string;
-  avatar: string;
-}
+export type { Profile } from '../utils/profiles';
+export { DEFAULT_PROFILES } from '../utils/profiles';
 
 // All 9 Key VN avatar options
 const AVATAR_OPTIONS = Array.from({ length: 9 }, (_, i) => `./avatars/key${i + 1}.jpg`);
-
-export const DEFAULT_PROFILES: Profile[] = [
-  { id: '1', name: 'Kud', color: '#fdbce6', avatar: AVATAR_OPTIONS[7] },
-  { id: '2', name: 'Guest', color: '#0071eb', avatar: AVATAR_OPTIONS[1] }
-];
 
 export function ProfilesScreen({
   onSelect,
@@ -33,30 +30,23 @@ export function ProfilesScreen({
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
+  const onAvatarSaved = useCallback((url: string) => {
+    setEditingProfile((p) => (p ? { ...p, avatar: url } : p));
+    setShowAvatarPicker(false);
+  }, []);
+
+  const { cropImageSrc, pickProfileImage, cancelCrop, applyCrop } =
+    useProfileImageCropFlow(onAvatarSaved);
+
   useEffect(() => {
     const saved = localStorage.getItem('netflix_profiles');
     if (saved) {
-      let parsed = JSON.parse(saved);
-      
-      // Force migrate old "John" profile to "Kud"
-      let needsSave = false;
-      parsed = parsed.map((p: Profile) => {
-        if (p.name === 'John') {
-          needsSave = true;
-          return { ...p, name: 'Kud', color: '#fdbce6', avatar: AVATAR_OPTIONS[7] };
-        }
-        if (p.avatar.includes('api.dicebear.com') || p.avatar.startsWith('data:image/svg') || p.avatar.includes('./avatars/avatar')) {
-          needsSave = true;
-          return { ...p, avatar: generateLocalAvatar(p.name) };
-        }
-        return p;
-      });
-      
-      if (needsSave) {
-        localStorage.setItem('netflix_profiles', JSON.stringify(parsed));
+      const parsed = JSON.parse(saved) as Profile[];
+      const { profiles: normalized, changed } = normalizeStoredProfiles(parsed);
+      if (changed) {
+        localStorage.setItem('netflix_profiles', JSON.stringify(normalized));
       }
-      
-      setProfiles(parsed);
+      setProfiles(normalized);
     } else {
       setProfiles(DEFAULT_PROFILES);
       localStorage.setItem('netflix_profiles', JSON.stringify(DEFAULT_PROFILES));
@@ -118,19 +108,21 @@ export function ProfilesScreen({
         {/* Custom Upload */}
         <div className='mb-8'>
           <button
-            onClick={async () => {
-              if (!window.electronAPI?.cacheProfileImage) return;
-              const cachedPath = await window.electronAPI.cacheProfileImage();
-              if (cachedPath) {
-                setEditingProfile({ ...editingProfile, avatar: cachedPath });
-                setShowAvatarPicker(false);
-              }
-            }}
+            type="button"
+            onClick={() => pickProfileImage()}
             className='flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition'
           >
             <Upload className='w-4 h-4' /> Upload Custom Image
           </button>
         </div>
+
+        {cropImageSrc && (
+          <ProfileImageCropModal
+            imageSrc={cropImageSrc}
+            onCancel={cancelCrop}
+            onApply={applyCrop}
+          />
+        )}
 
         <button 
           onClick={() => setShowAvatarPicker(false)}

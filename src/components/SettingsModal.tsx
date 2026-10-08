@@ -1,4 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { ProfileImageCropModal } from './ProfileImageCropModal';
+import { useProfileImageCropFlow } from '../hooks/useProfileImageCropFlow';
+import type { AppUpdateInfo } from '../utils/appUpdate';
+import { getBundledAppVersion, resolveAppVersion } from '../utils/appVersion';
 import { X, Palette, Image as ImageIcon, Save, Type, Maximize, Settings as SettingsIcon, MonitorPlay, ScreenShare, ShieldAlert, Check, User, Upload, Edit2, FolderOpen, Trash2 } from 'lucide-react';
 import type { Profile } from './ProfilesScreen';
 import {
@@ -6,7 +10,9 @@ import {
   MAX_APP_NAME_LENGTH,
   isUsingDefaultTmdbApiKey,
   truncateAppName,
+  DEFAULT_APP_NAME,
 } from '../utils/settings';
+import { normalizeStoredProfiles } from '../utils/profiles';
 
 export interface Settings {
   accentColor: string;
@@ -21,17 +27,19 @@ export interface Settings {
   skipProfilePicker: boolean;
   defaultProfileId: string | null;
   compactLibraryButton: boolean;
-  appIcon: 'default' | 'alternate';
   autoSyncLibrary: boolean;
   customTmdbApiKey: string;
   watchedIndicatorMode: 'always' | 'hover' | 'never';
 }
 
-const RECENT_COLORS = ['#003e8f', '#bc13fe', '#E50914', '#555555', '#7b4cff'];
+const RECENT_COLORS = ['#E50914', '#003e8f', '#bc13fe', '#555555', '#7b4cff'];
 
 const AVATAR_OPTIONS = Array.from({ length: 9 }, (_, i) => `./avatars/key${i + 1}.jpg`);
 
-export function SettingsModal({ onClose, onSave, currentSettings, activeProfileId: _activeProfileId, initialTab = 'general', onScanLibrary, librarySyncing = false }: { 
+const REPO_URL = 'https://github.com/LeRubix/Rubflix';
+const FORK_REPO_URL = 'https://github.com/NekoIsUnavailable/Kudflix';
+
+export function SettingsModal({ onClose, onSave, currentSettings, activeProfileId: _activeProfileId, initialTab = 'general', onScanLibrary, librarySyncing = false, appUpdateInfo = null }: { 
   onClose: () => void, 
   onSave: (settings: Settings) => void,
   currentSettings: Settings,
@@ -39,16 +47,16 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
   initialTab?: 'general' | 'library' | 'personalization' | 'profiles' | 'advanced',
   onScanLibrary?: () => void | Promise<void>,
   librarySyncing?: boolean,
+  appUpdateInfo?: AppUpdateInfo | null,
 }) {
   const [settings, setSettings] = useState<Settings>({
     ...currentSettings,
-    appName: truncateAppName(currentSettings.appName ?? 'Kudflix'),
+    appName: truncateAppName(currentSettings.appName ?? DEFAULT_APP_NAME),
     movieFolders: currentSettings.movieFolders ?? [],
     tvFolders: currentSettings.tvFolders ?? [],
     skipProfilePicker: currentSettings.skipProfilePicker ?? false,
     defaultProfileId: currentSettings.defaultProfileId ?? null,
     compactLibraryButton: currentSettings.compactLibraryButton ?? false,
-    appIcon: currentSettings.appIcon ?? 'default',
     autoSyncLibrary: currentSettings.autoSyncLibrary ?? true,
     customTmdbApiKey: currentSettings.customTmdbApiKey ?? '',
     watchedIndicatorMode: currentSettings.watchedIndicatorMode ?? 'always',
@@ -64,27 +72,39 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showAvatarGrid, setShowAvatarGrid] = useState(false);
-  const [iconPreviews, setIconPreviews] = useState<{ default: string | null; alternate: string | null }>({ default: null, alternate: null });
+  const [appVersion, setAppVersion] = useState(() => getBundledAppVersion());
 
-  useEffect(() => {
-    const saved = localStorage.getItem('netflix_profiles');
-    if (saved) setProfiles(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
-    const api = window.electronAPI;
-    if (!api?.getAppIconPath) return;
-    Promise.all([
-      api.getAppIconPath('default'),
-      api.getAppIconPath('alternate'),
-    ]).then(([defaultPath, alternatePath]) => {
-      setIconPreviews({ default: defaultPath, alternate: alternatePath });
+  const onAvatarSaved = useCallback((url: string) => {
+    setEditingProfile((current) => {
+      if (!current) return current;
+      const updated = { ...current, avatar: url };
+      setProfiles((prev) => {
+        const newProfiles = prev.map((p) => (p.id === updated.id ? updated : p));
+        localStorage.setItem('netflix_profiles', JSON.stringify(newProfiles));
+        return newProfiles;
+      });
+      setShowAvatarGrid(false);
+      return updated;
     });
   }, []);
 
-  const applyAppIcon = (variant: 'default' | 'alternate') => {
-    window.electronAPI?.setAppIcon?.(variant);
-  };
+  const { cropImageSrc, pickProfileImage, cancelCrop, applyCrop } =
+    useProfileImageCropFlow(onAvatarSaved);
+
+  useEffect(() => {
+    void resolveAppVersion().then(setAppVersion);
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('netflix_profiles');
+    if (!saved) return;
+    const parsed = JSON.parse(saved) as Profile[];
+    const { profiles: normalized, changed } = normalizeStoredProfiles(parsed);
+    if (changed) {
+      localStorage.setItem('netflix_profiles', JSON.stringify(normalized));
+    }
+    setProfiles(normalized);
+  }, []);
 
   const handleSave = async () => {
     const customTmdbApiKey =
@@ -113,7 +133,6 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     }
 
     setTmdbKeyError(null);
-    applyAppIcon(next.appIcon ?? 'default');
     onSave(next);
     onClose();
   };
@@ -156,19 +175,20 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     setSettings({ ...settings, [key]: settings[key].filter(f => f !== folder) });
   };
 
-  const handleCustomAvatarUpload = async () => {
-    if (!editingProfile || !window.electronAPI?.cacheProfileImage) return;
-    const cachedPath = await window.electronAPI.cacheProfileImage();
-    if (!cachedPath) return;
-    const updated = { ...editingProfile, avatar: cachedPath };
-    setEditingProfile(updated);
-    const newProfiles = profiles.map(p => p.id === updated.id ? updated : p);
-    setProfiles(newProfiles);
-    localStorage.setItem('netflix_profiles', JSON.stringify(newProfiles));
-    setShowAvatarGrid(false);
+  const handleCustomAvatarUpload = () => {
+    if (!editingProfile) return;
+    void pickProfileImage();
   };
 
   return (
+    <>
+    {cropImageSrc && (
+      <ProfileImageCropModal
+        imageSrc={cropImageSrc}
+        onCancel={cancelCrop}
+        onApply={applyCrop}
+      />
+    )}
     <div className="fixed inset-0 z-[200] bg-black/80 overflow-y-auto p-4">
       <div className="mx-auto flex min-h-full w-full max-w-[920px] items-center justify-center py-2">
       <div className="bg-[#181818] w-full max-h-[calc(100vh-2rem)] rounded-xl shadow-2xl border border-gray-800 flex flex-col md:flex-row overflow-hidden min-h-0">
@@ -294,6 +314,34 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                 <p className="text-xs text-gray-500 mt-2">
                   Controls the eye icon on watched thumbnails. Watched status is always tracked for filters and toggles.
                 </p>
+              </div>
+
+              <div className="pt-6 border-t border-gray-800 space-y-1">
+                <p className="text-xs text-gray-500">
+                  <a
+                    href={REPO_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gray-400 hover:text-white underline font-semibold"
+                  >
+                    {settings.appName} v{appVersion}
+                  </a>
+                </p>
+                {appUpdateInfo?.status === 'update' && appUpdateInfo.latestVersion && (
+                  <p className="text-xs">
+                    <a
+                      href={appUpdateInfo.releaseUrl ?? REPO_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-accent hover:underline font-semibold"
+                    >
+                      Update available: v{appUpdateInfo.latestVersion}
+                    </a>
+                  </p>
+                )}
+                {appUpdateInfo?.status === 'current' && (
+                  <p className="text-xs text-gray-600">You&apos;re up to date.</p>
+                )}
               </div>
 
             </div>
@@ -458,33 +506,6 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-3">App Icon</label>
-                <p className="text-xs text-gray-500 mb-3">Changes the window and taskbar icon while the app is running.</p>
-                <div className="flex gap-4">
-                  {(['default', 'alternate'] as const).map((variant) => (
-                    <button
-                      key={variant}
-                      type="button"
-                      onClick={() => {
-                        setSettings({ ...settings, appIcon: variant });
-                        applyAppIcon(variant);
-                      }}
-                      className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition ${
-                        settings.appIcon === variant ? 'border-white bg-white/5' : 'border-gray-700 hover:border-gray-500'
-                      }`}
-                    >
-                      {iconPreviews[variant] ? (
-                        <img src={iconPreviews[variant]!} alt="" className="w-12 h-12 rounded object-contain bg-black/30" />
-                      ) : (
-                        <div className="w-12 h-12 rounded bg-gray-800" />
-                      )}
-                      <span className="text-xs font-semibold text-gray-300 capitalize">{variant}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
             </div>
           )}
 
@@ -549,6 +570,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                     ))}
                   </div>
                   <button
+                    type="button"
                     onClick={handleCustomAvatarUpload}
                     className='inline-flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-white text-sm font-semibold transition'
                   >
@@ -651,10 +673,10 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
           )}
 
           {activeTab === 'advanced' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-              <h3 className="text-xl font-bold text-white mb-6">Advanced Settings</h3>
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <h3 className="text-xl font-bold text-white">Advanced</h3>
 
-              <div className="space-y-3">
+              <section className="rounded-lg border border-gray-800 bg-gray-800/20 p-4 space-y-3">
                 <label className="block text-sm font-bold text-white">TMDB API Key</label>
                 <input
                   type={isDefaultTmdbKeyMode && !settings.customTmdbApiKey.trim() ? 'password' : 'text'}
@@ -700,74 +722,78 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                 >
                   Reset to default
                 </button>
-              </div>
+              </section>
 
-              <div>
-                <div className="flex items-center gap-3 mb-4 bg-gray-800/30 p-4 rounded-lg border border-gray-800 cursor-pointer hover:bg-gray-800/50 transition"
-                     onClick={() => setSettings({ ...settings, useExternalPlayer: !settings.useExternalPlayer })}>
-                  <MonitorPlay className="w-5 h-5 text-accent" />
-                  <div className="flex-grow">
+              <section className="rounded-lg border border-gray-800 bg-gray-800/20 overflow-hidden">
+                <div
+                  className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-800/40 transition"
+                  onClick={() => setSettings({ ...settings, useExternalPlayer: !settings.useExternalPlayer })}
+                >
+                  <MonitorPlay className="w-5 h-5 text-accent shrink-0" />
+                  <div className="flex-grow min-w-0">
                     <label className="text-sm font-bold text-white block cursor-pointer">
-                      Use External Video Player
+                      External video player
                     </label>
-                    <span className="text-xs text-gray-400">Launch VLC or PotPlayer instead of internal player</span>
+                    <span className="text-xs text-gray-500">VLC or PotPlayer instead of built-in mpv</span>
                   </div>
-                  <input 
+                  <input
                     type="checkbox"
                     checked={settings.useExternalPlayer}
                     onChange={(e) => setSettings({ ...settings, useExternalPlayer: e.target.checked })}
-                    className="w-5 h-5 accent-accent"
+                    className="w-5 h-5 accent-accent shrink-0"
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
-                
+
                 {settings.useExternalPlayer && (
-                  <div className="ml-2 pl-4 border-l-2 border-gray-700 space-y-2 animate-in slide-in-from-top-2">
-                    <label className="block text-xs font-semibold text-gray-400">Path to Player Executable (.exe)</label>
+                  <div className="px-4 pb-4 pt-0 border-t border-gray-800/80 space-y-2">
+                    <label className="block text-xs font-semibold text-gray-500 pt-3">Executable path</label>
                     <div className="flex gap-2">
-                      <input 
+                      <input
                         type="text"
                         value={settings.externalPlayerPath}
                         onChange={(e) => setSettings({ ...settings, externalPlayerPath: e.target.value })}
-                        className="bg-black/50 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white outline-none flex-grow focus:border-accent transition"
-                        placeholder="C:\Program Files\DAUM\PotPlayer\PotPlayer64.exe"
+                        className="bg-black/50 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white outline-none flex-grow focus:border-accent transition min-w-0"
+                        placeholder="C:\Program Files\VideoLAN\VLC\vlc.exe"
                       />
-                      <button 
+                      <button
+                        type="button"
                         onClick={async () => {
                           const path = await window.electronAPI.selectFile();
                           if (path) setSettings({ ...settings, externalPlayerPath: path });
                         }}
-                        className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-white text-sm font-bold transition shadow"
+                        className="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-white text-sm font-bold transition shrink-0"
                       >
                         Browse
                       </button>
                     </div>
                   </div>
                 )}
-              </div>
+              </section>
 
-              <div className="bg-gray-800/30 p-4 rounded-lg border border-gray-800">
-                <div className="flex items-center gap-3 mb-2">
-                  <ScreenShare className="w-5 h-5 text-accent" />
-                  <span className="text-sm font-bold text-white">Streaming to Discord or OBS</span>
-                </div>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Video is drawn in its own window, so sharing the main {settings.appName} window shows
-                  the library but not the media. To let viewers see what&rsquo;s playing, either share
-                  your whole screen, or pick the{' '}
-                  <span className="text-gray-200 font-semibold">{settings.appName} Player</span> window
-                  from the share menu once playback has started.
+              <p className="text-[11px] text-gray-500 flex items-start gap-2 px-1">
+                <ScreenShare className="w-3.5 h-3.5 text-gray-600 shrink-0 mt-0.5" />
+                <span>
+                  For Discord/OBS, share the <span className="text-gray-400">{settings.appName} Player</span> window
+                  (or the whole screen)—not the main library window.
+                </span>
+              </p>
+
+              <div className="pt-4 border-t border-gray-800 space-y-1">
+                <p className="text-[11px] text-gray-600">
+                  Playback via{' '}
+                  <a href="https://mpv.io" className="text-gray-500 hover:text-gray-300 underline" target="_blank" rel="noreferrer">mpv</a>
+                  {' '}(LGPL-2.1)
+                </p>
+                <p className="text-[11px] text-gray-600">
+                  Forked from{' '}
+                  <a href={FORK_REPO_URL} className="text-gray-500 hover:text-gray-300 underline" target="_blank" rel="noreferrer">
+                    Kudflix
+                  </a>
                 </p>
               </div>
 
-              <div className="pt-6 border-t border-gray-800">
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Kudflix uses <a href="https://mpv.io" className="text-gray-400 hover:text-white underline" target="_blank" rel="noreferrer">mpv</a> (LGPL-2.1) for media playback.
-                  Source: <a href="https://github.com/mpv-player/mpv" className="text-gray-400 hover:text-white underline" target="_blank" rel="noreferrer">github.com/mpv-player/mpv</a>
-                </p>
-              </div>
-
-              <div className="pt-8 mt-4 border-t border-gray-800">
+              <div className="pt-4 mt-2 border-t border-gray-800">
                 <button
                   onClick={() => {
                     if (confirm("Are you sure you want to completely reset all settings and library data? The app will reload.")) {
@@ -799,5 +825,6 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
       </div>
       </div>
     </div>
+    </>
   );
 }

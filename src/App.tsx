@@ -11,7 +11,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SettingsModal } from './components/SettingsModal';
 import { ContentRow, DetailModal } from './components/NetflixUI';
 import type { LocalFile } from './components/NetflixUI';
-import { applyMediaOverride, saveMediaOverride, type MediaOverride } from './utils/mediaOverrides';
+import {
+  applyMediaOverride,
+  clearMediaOverride,
+  saveMediaOverride,
+  type MediaOverride,
+} from './utils/mediaOverrides';
+import { resolveFileMeta } from './utils/metadata';
 import { loadSettings, saveSettings } from './utils/settings';
 import { StartupScreen } from './components/StartupScreen';
 import { ProfilesScreen } from './components/ProfilesScreen';
@@ -29,6 +35,8 @@ import {
 } from './utils/grouping';
 import {
   clearTmdbCaches,
+  getTMDBLookupOptions,
+  invalidateTmdbForVideo,
   invalidateTmdbSession,
   prefetchTMDBCatalog,
   prefetchTMDBDetailsCatalog,
@@ -37,6 +45,8 @@ import {
 import { useTMDB } from './hooks/useTMDB';
 import { isTmdbDisabled } from './utils/mediaOverrides';
 import { setManualWatched } from './utils/watched';
+import { scheduleAppUpdateCheck, type AppUpdateInfo } from './utils/appUpdate';
+import { resolveAppVersion } from './utils/appVersion';
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
@@ -67,6 +77,20 @@ export default function App() {
   const [overrideTick, setOverrideTick] = useState(0);
   const [watchedTick, setWatchedTick] = useState(0);
   const [tmdbCacheTick, setTmdbCacheTick] = useState(0);
+  const [appUpdateInfo, setAppUpdateInfo] = useState<AppUpdateInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveAppVersion().then((version) => {
+      if (cancelled) return;
+      scheduleAppUpdateCheck(version, (info) => {
+        if (!cancelled) setAppUpdateInfo(info);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleWatchedChange = useCallback(() => {
     setWatchedTick((t) => t + 1);
@@ -165,7 +189,7 @@ export default function App() {
     }
 
     saveSettings(settings);
-    window.electronAPI?.setAppIcon?.(settings.appIcon ?? 'default');
+    window.electronAPI?.setAppIcon?.('default');
   }, [settings]);
 
   useEffect(() => {
@@ -175,12 +199,68 @@ export default function App() {
     ]);
   }, [settings.movieFolders, settings.tvFolders]);
 
+  const refreshVideoFromLibrary = (file: LocalFile): LocalFile => {
+    const meta = resolveFileMeta(
+      {
+        name: file.name,
+        path: file.path,
+        localNfoContent: file.localNfoContent,
+      },
+      file.category,
+    );
+    const { tmdbDisabled: _removed, ...rest } = file;
+    return applyMediaOverride({ ...rest, meta });
+  };
+
   const handleUpdateVideo = (path: string, override: MediaOverride) => {
+    const previous = files.find((f) => f.path === path) ?? infoVideo;
+    const prevLookup = previous ? getTMDBLookupOptions(previous) : undefined;
+
     saveMediaOverride(path, override);
     setOverrideTick((t) => t + 1);
-    if ('tmdbId' in override) setTmdbCacheTick((t) => t + 1);
-    setFiles((prev) => prev.map((f) => (f.path === path ? applyMediaOverride(f) : f)));
-    setInfoVideo((prev) => (prev?.path === path ? applyMediaOverride(prev) : prev));
+
+    const affectsTmdb =
+      'tmdbId' in override ||
+      'title' in override ||
+      'year' in override ||
+      'disableTmdb' in override;
+
+    setFiles((prev) =>
+      prev.map((f) => {
+        if (f.path !== path) return f;
+        const updated = applyMediaOverride(f);
+        invalidateTmdbForVideo(updated, prevLookup);
+        return updated;
+      }),
+    );
+
+    setInfoVideo((prev) => {
+      if (prev?.path !== path) return prev;
+      const updated = applyMediaOverride(prev);
+      invalidateTmdbForVideo(updated, prevLookup);
+      return updated;
+    });
+
+    if (affectsTmdb) setTmdbCacheTick((t) => t + 1);
+  };
+
+  const handleResetVideo = (path: string) => {
+    const previous = files.find((f) => f.path === path) ?? infoVideo;
+    const prevLookup = previous ? getTMDBLookupOptions(previous) : undefined;
+
+    clearMediaOverride(path);
+    setOverrideTick((t) => t + 1);
+    setTmdbCacheTick((t) => t + 1);
+
+    const resetOne = (f: LocalFile): LocalFile => {
+      if (f.path !== path) return f;
+      const refreshed = refreshVideoFromLibrary(f);
+      invalidateTmdbForVideo(refreshed, prevLookup);
+      return refreshed;
+    };
+
+    setFiles((prev) => prev.map(resetOne));
+    setInfoVideo((prev) => (prev?.path === path ? resetOne(prev) : prev));
   };
 
   const handleEpisodeEnriched = useCallback((batch: LocalFile[]) => {
@@ -788,6 +868,7 @@ export default function App() {
           onClose={() => setInfoVideo(null)}
           onPlay={(v) => { setInfoVideo(null); handlePlayVideo(v); }}
           onUpdate={handleUpdateVideo}
+          onReset={handleResetVideo}
           onEpisodeEnriched={handleEpisodeEnriched}
           progresses={progresses}
           activeProfileId={activeProfile}
@@ -828,6 +909,7 @@ export default function App() {
         <SettingsModal 
           currentSettings={settings}
           initialTab={settingsTab}
+          appUpdateInfo={appUpdateInfo}
           onScanLibrary={() => scanLibrary(true)}
           librarySyncing={librarySyncing}
           onSave={(newSettings) => {

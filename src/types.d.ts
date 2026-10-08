@@ -95,6 +95,9 @@ declare global {
       selectFolders: () => Promise<string[]>;
       selectFile: () => Promise<string | null>;
       cacheProfileImage: () => Promise<string | null>;
+      pickProfileImage: () => Promise<string | null>;
+      saveProfileImage: (dataUrl: string) => Promise<string | null>;
+      getAppVersion: () => Promise<string>;
       selectWallpaperImage: () => Promise<string | null>;
       playInExternalPlayer: (playerPath: string, videoPath: string) => Promise<void>;
       probeMedia: (videoPath: string) => Promise<{ audioCodec: string | null; hasAudio: boolean | null }>;

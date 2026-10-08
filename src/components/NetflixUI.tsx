@@ -323,6 +323,7 @@ export function DetailModal({
   onClose,
   onPlay,
   onUpdate,
+  onReset,
   onEpisodeEnriched,
   progresses = {},
   activeProfileId,
@@ -334,6 +335,7 @@ export function DetailModal({
   onClose: () => void;
   onPlay: (v: LocalFile) => void;
   onUpdate?: (path: string, override: MediaOverride) => void;
+  onReset?: (path: string) => void;
   onEpisodeEnriched?: (enriched: LocalFile[]) => void;
   progresses?: Record<string, number>;
   activeProfileId?: string | null;
@@ -721,12 +723,34 @@ export function DetailModal({
                       />
                     )}
                   </div>
-                  <button
-                    onClick={handleSaveEdits}
-                    className="flex items-center gap-2 bg-accent text-white px-6 py-2 rounded font-bold hover:opacity-90 transition"
-                  >
-                    <Save className="w-4 h-4" /> Save Changes
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleSaveEdits}
+                      className="flex items-center gap-2 bg-accent text-white px-6 py-2 rounded font-bold hover:opacity-90 transition"
+                    >
+                      <Save className="w-4 h-4" /> Save Changes
+                    </button>
+                    {onReset && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              'Reset this title to its default metadata? Manual edits and TMDB overrides will be removed.',
+                            )
+                          ) {
+                            return;
+                          }
+                          onReset(video.path);
+                          setIsEditing(false);
+                        }}
+                        className="text-sm text-red-400 hover:text-red-300 font-semibold transition"
+                      >
+                        Reset to default
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <p className="text-gray-200 leading-relaxed text-base mb-8">

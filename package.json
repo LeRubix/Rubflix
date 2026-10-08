@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.kudflix.app",
-    "productName": "Kudflix",
+    "productName": "Rubflix",
     "directories": {
       "output": "../release_kudflix"
     },
@@ -30,13 +30,12 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Kudflix"
+      "shortcutName": "Rubflix"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
       "build/icon.png",
-      "build/icon2.png",
       "!electron/bin/**/*"
     ],
     "extraResources": [
@@ -44,8 +43,7 @@
         "from": "build",
         "to": "icons",
         "filter": [
-          "icon.png",
-          "icon2.png"
+          "icon.png"
         ]
       },
       {
@@ -68,6 +66,7 @@
     "postcss": "^8.5.26",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-easy-crop": "^6.2.4",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

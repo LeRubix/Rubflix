@@ -15,8 +15,9 @@ const RELEASE_TAGS =
 const EDITION_TAGS =
   /\b(?:uncut|theatrical\s*cut|extended\s*(?:cut|edition)|directors?\s*cut|final\s*cut|unrated\s*cut|special\s*edition|ultimate\s*edition|collectors?\s*edition|anniversary\s*edition|remastered|criterion\s*collection)\b/gi;
 
-/** Trailing release-group suffixes, e.g. -SM737, -YTS.MX, [YTS.MX], not title words. */
-const GROUP_SUFFIX = /(?:[-_][A-Z0-9]{2,12}(?:\.[A-Z0-9]{2,8})*|\[[A-Z0-9][A-Z0-9.\-_]*\])$/i;
+/** Trailing release-group suffixes, e.g. -SM737, -YTS.MX, [YTS.MX], not title words (case-sensitive on -groups). */
+const GROUP_SUFFIX =
+  /(?:[-_][A-Z0-9]{2,12}(?:\.[A-Z0-9]{2,8})*$|\[[A-Za-z0-9][A-Za-z0-9.\-_]*\]$)/;
 
 const EPISODE_CODE = /[.\s_-]*[Ss](\d{1,2})[Ee](\d{1,2})/i;
 
@@ -29,18 +30,22 @@ function isTitleEmbeddedYear(name: string, year: string): boolean {
 
 function extractYearFromName(name: string): string {
   const patterns: RegExp[] = [
-    /\(\s*((?:19|20)\d{2})\s*\)/,
-    /\[\s*((?:19|20)\d{2})\s*\]/,
-    /(?:^|[.\s_-])((?:19|20)\d{2})(?=[.\s_.\-[\]|]|$)/,
+    /\(\s*((?:19|20)\d{2})\s*\)/g,
+    /\[\s*((?:19|20)\d{2})\s*\]/g,
+    /(?:^|[.\s_-])((?:19|20)\d{2})(?=[.\s_.\-[\]|]|$)/g,
   ];
 
+  const candidates: string[] = [];
   for (const pattern of patterns) {
-    const match = name.match(pattern);
-    const year = match?.[1];
-    if (year && !isTitleEmbeddedYear(name, year)) return year;
+    for (const match of name.matchAll(pattern)) {
+      const year = match[1];
+      if (year && !isTitleEmbeddedYear(name, year)) candidates.push(year);
+    }
   }
 
-  return '';
+  if (candidates.length === 0) return '';
+  // Release year usually follows the title (e.g. Blade.Runner.2049.2017…).
+  return candidates[candidates.length - 1];
 }
 
 /** Parse TV series folder names like "Rome (2005)". */
@@ -81,13 +86,15 @@ function stripFromReleaseYear(name: string, year: string): string {
 function stripReleaseClutter(name: string, year: string): string {
   let result = stripFromReleaseYear(name, year);
 
+  // Dot-separated titles (Spider-Man.Brand.New.Day) must become words before tag/group stripping.
+  result = result.replace(/[._-]+/g, ' ');
+
   result = result
     .replace(/\[[^\]]*\]/g, ' ')
     .replace(/\([^)]*\)/g, ' ')
     .replace(GROUP_SUFFIX, ' ')
     .replace(RELEASE_TAGS, ' ')
-    .replace(EDITION_TAGS, ' ')
-    .replace(/[._-]+/g, ' ');
+    .replace(EDITION_TAGS, ' ');
 
   if (year) {
     result = result.replace(new RegExp(`\\b${year}\\b`, 'g'), ' ');
@@ -213,14 +220,19 @@ export function getEpisodeDisplayTitle(
 }
 
 /** Instant local metadata, no network. Used during library scan. */
-export function getLocalMeta(filename: string, category?: 'movie' | 'tv'): MovieMeta {
+export function getLocalMeta(
+  filename: string,
+  category?: 'movie' | 'tv',
+  filePath?: string,
+): MovieMeta {
+  const parseSource = filePath ? basenameFromPath(filePath) : filename;
   const { title, year } =
-    category === 'tv' && isEpisodeFilename(filename)
+    category === 'tv' && isEpisodeFilename(parseSource)
       ? (() => {
-          const ep = parseEpisodeFilename(filename);
+          const ep = parseEpisodeFilename(parseSource);
           return { title: ep.episodeTitle, year: ep.year ?? '' };
         })()
-      : parseFilenameMeta(filename);
+      : parseFilenameMeta(parseSource);
 
   return {
     title,
@@ -231,25 +243,72 @@ export function getLocalMeta(filename: string, category?: 'movie' | 'tv'): Movie
   };
 }
 
-function parseNfoMeta(nfo: string, fallbackTitle: string, category?: 'movie' | 'tv'): MovieMeta {
-  const meta = getLocalMeta(fallbackTitle, category);
+export function basenameFromPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const idx = normalized.lastIndexOf('/');
+  return idx >= 0 ? normalized.slice(idx + 1) : normalized;
+}
+
+function normalizeComparableTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** When NFO and filename disagree, keep the more specific title (e.g. Blade Runner 2049 vs Blade Runner). */
+export function pickPreferredTitle(fromNfo: string, fromFile: string): string {
+  const nfo = fromNfo.trim();
+  const file = fromFile.trim();
+  if (!file) return nfo;
+  if (!nfo) return file;
+
+  const n = normalizeComparableTitle(nfo);
+  const f = normalizeComparableTitle(file);
+  if (n === f) return nfo;
+  if (f.includes(n) && f.length > n.length) return file;
+  if (n.includes(f) && n.length > f.length) return nfo;
+  return nfo;
+}
+
+function parseNfoMeta(
+  nfo: string,
+  fallbackTitle: string,
+  category?: 'movie' | 'tv',
+  filePath?: string,
+): MovieMeta {
+  const parseSource = filePath ? basenameFromPath(filePath) : fallbackTitle;
+  const fromFile = parseFilenameMeta(parseSource);
+  const meta = getLocalMeta(fallbackTitle, category, filePath);
+
   const titleMatch = nfo.match(/<title>(.*?)<\/title>/i);
   const plotMatch = nfo.match(/<plot>(.*?)<\/plot>/i);
   const yearMatch = nfo.match(/<year>(.*?)<\/year>/i);
   const genreMatch = nfo.match(/<genre>(.*?)<\/genre>/i);
-  if (titleMatch) meta.title = titleMatch[1];
+
+  if (titleMatch) {
+    meta.title = pickPreferredTitle(titleMatch[1], fromFile.title);
+  } else if (fromFile.title) {
+    meta.title = fromFile.title;
+  }
+
   if (plotMatch) meta.description = plotMatch[1];
   if (yearMatch) meta.year = yearMatch[1];
+  else if (fromFile.year) meta.year = fromFile.year;
   if (genreMatch) meta.genre = genreMatch[1];
+
   return meta;
 }
 
 export function resolveFileMeta(
-  file: { name: string; localNfoContent?: string | null },
+  file: { name: string; path?: string; localNfoContent?: string | null },
   category?: 'movie' | 'tv',
 ): MovieMeta {
-  if (file.localNfoContent) return parseNfoMeta(file.localNfoContent, file.name, category);
-  return getLocalMeta(file.name, category);
+  if (file.localNfoContent) {
+    return parseNfoMeta(file.localNfoContent, file.name, category, file.path);
+  }
+  return getLocalMeta(file.name, category, file.path);
 }
 
 export async function fetchMetadata(filename: string): Promise<MovieMeta> {

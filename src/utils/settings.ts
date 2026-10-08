@@ -31,11 +31,13 @@ export function truncateAppName(name: string): string {
   return name.slice(0, MAX_APP_NAME_LENGTH);
 }
 
+export const DEFAULT_APP_NAME = 'Rubflix';
+
 const DEFAULT_SETTINGS: Settings = {
   accentColor: '#E50914',
   wallpaperPath: '',
   overlayOpacity: 0.5,
-  appName: 'Kudflix',
+  appName: DEFAULT_APP_NAME,
   uiScale: 1.0,
   useExternalPlayer: false,
   externalPlayerPath: '',
@@ -44,7 +46,6 @@ const DEFAULT_SETTINGS: Settings = {
   skipProfilePicker: false,
   defaultProfileId: null,
   compactLibraryButton: false,
-  appIcon: 'default' as const,
   autoSyncLibrary: true,
   customTmdbApiKey: '',
   watchedIndicatorMode: 'always' as const,
@@ -67,7 +68,9 @@ export function loadSettings(): Settings {
         accentColor: accentColor === '#cf3f4c' ? '#E50914' : accentColor,
         wallpaperPath: parsed.wallpaperPath ?? '',
         overlayOpacity: parsed.overlayOpacity ?? DEFAULT_SETTINGS.overlayOpacity,
-        appName: truncateAppName(parsed.appName ?? DEFAULT_SETTINGS.appName),
+        appName: truncateAppName(
+          parsed.appName === 'Kudflix' ? DEFAULT_APP_NAME : (parsed.appName ?? DEFAULT_SETTINGS.appName),
+        ),
         uiScale: parsed.uiScale ?? DEFAULT_SETTINGS.uiScale,
         useExternalPlayer: parsed.useExternalPlayer ?? false,
         externalPlayerPath: parsed.externalPlayerPath ?? '',
@@ -76,7 +79,6 @@ export function loadSettings(): Settings {
         skipProfilePicker: parsed.skipProfilePicker ?? false,
         defaultProfileId: parsed.defaultProfileId ?? null,
         compactLibraryButton: parsed.compactLibraryButton ?? DEFAULT_SETTINGS.compactLibraryButton,
-        appIcon: parsed.appIcon === 'alternate' ? 'alternate' : 'default',
         autoSyncLibrary: parsed.autoSyncLibrary ?? DEFAULT_SETTINGS.autoSyncLibrary,
         customTmdbApiKey: parsed.customTmdbApiKey ?? '',
         watchedIndicatorMode:

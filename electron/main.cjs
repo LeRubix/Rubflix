@@ -164,20 +164,47 @@ ipcMain.handle('select-folders', async () => {
   return result.filePaths;
 });
 
-// IPC Handler to pick and cache a profile image in userData (survives source file moves)
-ipcMain.handle('cache-profile-image', async () => {
-  const result = await dialog.showOpenDialog({
+function pickProfileImagePath() {
+  return dialog.showOpenDialog({
     properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] }]
+    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] }],
   });
-  if (result.canceled) return null;
+}
 
-  const sourcePath = result.filePaths[0];
+function ensureAvatarsDir() {
   const avatarsDir = path.join(app.getPath('userData'), 'avatars');
   if (!fs.existsSync(avatarsDir)) {
     fs.mkdirSync(avatarsDir, { recursive: true });
   }
+  return avatarsDir;
+}
 
+ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('pick-profile-image', async () => {
+  const result = await pickProfileImagePath();
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('save-profile-image', async (_event, dataUrl) => {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return null;
+  const match = dataUrl.match(/^data:image\/\w+;base64,(.+)$/);
+  if (!match) return null;
+
+  const avatarsDir = ensureAvatarsDir();
+  const destPath = path.join(avatarsDir, `${Date.now()}.jpg`);
+  fs.writeFileSync(destPath, Buffer.from(match[1], 'base64'));
+  return `file:///${destPath.replace(/\\/g, '/')}`;
+});
+
+// IPC Handler to pick and cache a profile image in userData (legacy, no crop)
+ipcMain.handle('cache-profile-image', async () => {
+  const result = await pickProfileImagePath();
+  if (result.canceled) return null;
+
+  const sourcePath = result.filePaths[0];
+  const avatarsDir = ensureAvatarsDir();
   const ext = path.extname(sourcePath).toLowerCase() || '.jpg';
   const destPath = path.join(avatarsDir, `${Date.now()}${ext}`);
   fs.copyFileSync(sourcePath, destPath);
