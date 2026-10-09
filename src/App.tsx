@@ -18,6 +18,7 @@ import {
   type MediaOverride,
 } from './utils/mediaOverrides';
 import { resolveFileMeta } from './utils/metadata';
+import { getPlayerDisplayTitle } from './utils/displayTitle';
 import { loadSettings, saveSettings } from './utils/settings';
 import { StartupScreen } from './components/StartupScreen';
 import { ProfilesScreen } from './components/ProfilesScreen';
@@ -45,7 +46,13 @@ import {
 import { useTMDB } from './hooks/useTMDB';
 import { isTmdbDisabled } from './utils/mediaOverrides';
 import { setManualWatched } from './utils/watched';
-import { scheduleAppUpdateCheck, type AppUpdateInfo } from './utils/appUpdate';
+import {
+  dismissUpdateNotice,
+  isUpdateNoticeDismissed,
+  scheduleAppUpdateCheck,
+  type AppUpdateInfo,
+} from './utils/appUpdate';
+import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { resolveAppVersion } from './utils/appVersion';
 
 export default function App() {
@@ -78,6 +85,7 @@ export default function App() {
   const [watchedTick, setWatchedTick] = useState(0);
   const [tmdbCacheTick, setTmdbCacheTick] = useState(0);
   const [appUpdateInfo, setAppUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [updateNoticeDismissed, setUpdateNoticeDismissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +99,21 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  const showUpdateNotice =
+    !showStartup &&
+    !playingVideo &&
+    appUpdateInfo?.status === 'update' &&
+    appUpdateInfo.latestVersion &&
+    !updateNoticeDismissed &&
+    !isUpdateNoticeDismissed(appUpdateInfo.latestVersion);
+
+  const handleDismissUpdateNotice = useCallback(() => {
+    if (appUpdateInfo?.status === 'update' && appUpdateInfo.latestVersion) {
+      dismissUpdateNotice(appUpdateInfo.latestVersion);
+    }
+    setUpdateNoticeDismissed(true);
+  }, [appUpdateInfo]);
 
   const handleWatchedChange = useCallback(() => {
     setWatchedTick((t) => t + 1);
@@ -410,11 +433,17 @@ export default function App() {
     const next = getNextEpisode(video);
     return {
       path: video.path,
-      title: video.meta?.title || video.name,
+      title: getPlayerDisplayTitle(video),
       subtitle: episodeLabel(video),
       profileId: activeProfile,
       startTime,
-      next: next ? { path: next.path, title: next.meta?.title || next.name, subtitle: episodeLabel(next) } : null,
+      next: next
+        ? {
+            path: next.path,
+            title: getPlayerDisplayTitle(next),
+            subtitle: episodeLabel(next),
+          }
+        : null,
       appName: settings.appName,
     };
   };
@@ -903,6 +932,16 @@ export default function App() {
           watchedIndicatorMode={settings.watchedIndicatorMode}
         />
       )}
+
+      <AnimatePresence>
+        {showUpdateNotice && appUpdateInfo?.status === 'update' && (
+          <UpdateAvailableNotice
+            latestVersion={appUpdateInfo.latestVersion}
+            releaseUrl={appUpdateInfo.releaseUrl}
+            onDismiss={handleDismissUpdateNotice}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Settings Modal */}
       {showSettings && (

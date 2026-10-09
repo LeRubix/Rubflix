@@ -8,6 +8,24 @@ export type AppUpdateInfo =
   | { status: 'current' }
   | { status: 'unknown' };
 
+const DISMISS_PREFIX = 'kudflix_update_dismissed_';
+
+export function isUpdateNoticeDismissed(latestVersion: string): boolean {
+  try {
+    return localStorage.getItem(`${DISMISS_PREFIX}${latestVersion}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function dismissUpdateNotice(latestVersion: string): void {
+  try {
+    localStorage.setItem(`${DISMISS_PREFIX}${latestVersion}`, '1');
+  } catch {
+    // ignore
+  }
+}
+
 type CachedPayload = {
   checkedAt: number;
   latestVersion: string | null;
