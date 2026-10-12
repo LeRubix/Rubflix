@@ -13,6 +13,8 @@ import {
   DEFAULT_APP_NAME,
 } from '../utils/settings';
 import { normalizeStoredProfiles } from '../utils/profiles';
+import { ThemedSelect, WATCHED_INDICATOR_OPTIONS, DETAIL_MODAL_ACTIONS_OPTIONS } from './ThemedSelect';
+import { ConfirmDialog } from './ConfirmDialog';
 
 export interface Settings {
   accentColor: string;
@@ -30,6 +32,8 @@ export interface Settings {
   autoSyncLibrary: boolean;
   customTmdbApiKey: string;
   watchedIndicatorMode: 'always' | 'hover' | 'never';
+  /** Edit + Lists controls on the title detail hero. */
+  detailModalActionsMode: 'icons' | 'menu';
 }
 
 const RECENT_COLORS = ['#E50914', '#003e8f', '#bc13fe', '#555555', '#7b4cff'];
@@ -60,6 +64,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     autoSyncLibrary: currentSettings.autoSyncLibrary ?? true,
     customTmdbApiKey: currentSettings.customTmdbApiKey ?? '',
     watchedIndicatorMode: currentSettings.watchedIndicatorMode ?? 'always',
+    detailModalActionsMode: currentSettings.detailModalActionsMode ?? 'menu',
   });
   const [activeTab, setActiveTab] = useState<'general' | 'library' | 'personalization' | 'profiles' | 'advanced'>(initialTab);
   const [isDefaultTmdbKeyMode, setIsDefaultTmdbKeyMode] = useState(
@@ -73,6 +78,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [showAvatarGrid, setShowAvatarGrid] = useState(false);
   const [appVersion, setAppVersion] = useState(() => getBundledAppVersion());
+  const [showResetDataConfirm, setShowResetDataConfirm] = useState(false);
 
   const onAvatarSaved = useCallback((url: string) => {
     setEditingProfile((current) => {
@@ -297,22 +303,29 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
 
               <div>
                 <label className="block text-sm font-semibold text-gray-300 mb-2">Watched indicator</label>
-                <select
+                <ThemedSelect
                   value={settings.watchedIndicatorMode}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      watchedIndicatorMode: e.target.value as Settings['watchedIndicatorMode'],
-                    })
-                  }
-                  className="bg-black/50 border border-gray-700 rounded-lg px-4 py-3 text-sm text-white outline-none w-full focus:border-accent transition"
-                >
-                  <option value="always">Always Show</option>
-                  <option value="hover">On Hover</option>
-                  <option value="never">Never Show</option>
-                </select>
+                  onChange={(v) => setSettings({ ...settings, watchedIndicatorMode: v })}
+                  options={WATCHED_INDICATOR_OPTIONS}
+                  buttonClassName="px-4 py-3 bg-black/50 border-gray-700"
+                  menuZIndex={450}
+                />
                 <p className="text-xs text-gray-500 mt-2">
                   Controls the eye icon on watched thumbnails. Watched status is always tracked for filters and toggles.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">Title detail actions</label>
+                <ThemedSelect
+                  value={settings.detailModalActionsMode}
+                  onChange={(v) => setSettings({ ...settings, detailModalActionsMode: v })}
+                  options={DETAIL_MODAL_ACTIONS_OPTIONS}
+                  buttonClassName="px-4 py-3 bg-black/50 border-gray-700"
+                  menuZIndex={450}
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Edit and Lists on the expanded title view — separate icons or combined under a ⋯ menu.
                 </p>
               </div>
 
@@ -795,12 +808,8 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
 
               <div className="pt-4 mt-2 border-t border-gray-800">
                 <button
-                  onClick={() => {
-                    if (confirm("Are you sure you want to completely reset all settings and library data? The app will reload.")) {
-                      localStorage.clear();
-                      window.location.reload();
-                    }
-                  }}
+                  type="button"
+                  onClick={() => setShowResetDataConfirm(true)}
                   className="text-red-500 text-sm hover:underline font-semibold"
                 >
                   Reset All App Data
@@ -825,6 +834,20 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
       </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={showResetDataConfirm}
+      onClose={() => setShowResetDataConfirm(false)}
+      onConfirm={() => {
+        localStorage.clear();
+        window.location.reload();
+      }}
+      title="Reset all app data?"
+      confirmLabel="Reset everything"
+      danger
+      zIndex={500}
+    >
+      All settings, profiles, library data, and lists will be erased. The app will reload.
+    </ConfirmDialog>
     </>
   );
 }

@@ -68,6 +68,12 @@ class PlayerWindows {
     };
   }
 
+  raisePlayerAboveMain() {
+    if (!this.isOpen()) return;
+    // Keep the video/controls HWND above the library window while dragging or resizing.
+    this.playerWindow.moveTop();
+  }
+
   applyPlayerFullscreen(isFullscreen) {
     if (!this.isOpen()) return;
     if (isFullscreen) {
@@ -83,6 +89,7 @@ class PlayerWindows {
     } else {
       this.playerWindow.setBounds(this.getTargetBounds());
     }
+    this.raisePlayerAboveMain();
     this.playerWindow.webContents.send('player-fullscreen', isFullscreen);
   }
 
@@ -110,7 +117,7 @@ class PlayerWindows {
    */
   handleMainFocus() {
     if (!this.isOpen()) return;
-    this.playerWindow.moveTop();
+    this.raisePlayerAboveMain();
   }
 
   open(options = {}) {
@@ -158,11 +165,15 @@ class PlayerWindows {
     }
     this.playerWindow.setTitle(title);
 
+    // Stay above the main library window (same Z-order group) without covering the title strip.
+    this.playerWindow.setAlwaysOnTop(true, 'floating');
+
     this.playerWindow.once('ready-to-show', () => {
       if (!this.isOpen()) return;
       this.syncBounds();
       this.playerWindow.setTitle(title);
       this.playerWindow.show();
+      this.raisePlayerAboveMain();
       this.playerWindow.focus();
     });
 
@@ -222,6 +233,7 @@ class PlayerWindows {
     this.playerWindow = null;
     if (player && !player.isDestroyed()) {
       if (player.isFullScreen()) player.setFullScreen(false);
+      player.setAlwaysOnTop(false);
       player.removeAllListeners('closed');
       player.destroy();
     }

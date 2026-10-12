@@ -17,6 +17,7 @@ const OBSERVED_PROPERTIES = [
   'seeking',
   'eof-reached',
   'track-list',
+  'aid',
 ];
 
 function getMpvExecutablePath() {
@@ -40,6 +41,7 @@ function initialState() {
     loaded: false,
     error: null,
     tracks: [],
+    audioId: null,
   };
 }
 
@@ -55,6 +57,7 @@ class MpvController {
     this.lastEmit = 0;
     this.emitTimer = null;
     this.expectingExit = false;
+    this.resumeAfterLoad = null;
   }
 
   emit(immediate = false) {
@@ -87,6 +90,8 @@ class MpvController {
     this.state = initialState();
     this.state.volume = options.volume ?? 100;
     this.expectingExit = false;
+    this.resumeAfterLoad =
+      options.startTime && options.startTime > 0 ? options.startTime : null;
 
     const pipeName = `\\\\.\\pipe\\kudflix-mpv-${process.pid}-${Date.now()}`;
     const args = [
@@ -105,7 +110,6 @@ class MpvController {
       '--hwdec=auto-safe',
       '--vo=gpu',
       '--background-color=#000000',
-      '--audio-channels=auto-safe',
       '--hr-seek=yes',
       '--cache=yes',
       '--demuxer-max-bytes=150MiB',
@@ -129,9 +133,6 @@ class MpvController {
     }
     if (options.startTime && options.startTime > 0) {
       args.push(`--start=${options.startTime.toFixed(2)}`);
-    }
-    if (options.audioId) {
-      args.push(`--aid=${options.audioId}`);
     }
     if (options.subtitleId === 'no') {
       args.push('--sid=no');
@@ -239,13 +240,33 @@ class MpvController {
     if (msg.event === 'property-change') {
       this.onProperty(msg.name, msg.data);
     } else if (msg.event === 'file-loaded') {
-      this.state.loaded = true;
-      this.state.buffering = false;
-      this.emit(true);
+      void this.finishFileLoad();
     } else if (msg.event === 'end-file' && msg.reason === 'error') {
       this.state.error = 'This file could not be played.';
       this.emit(true);
     }
+  }
+
+  async finishFileLoad() {
+    const resume = this.resumeAfterLoad;
+    this.resumeAfterLoad = null;
+    this.state.buffering = true;
+    this.emit(true);
+
+    try {
+      if (resume != null && resume > 0) {
+        // CLI --start can leave embedded video (wid) stuck on a still frame until a seek;
+        // re-seek after load refreshes decoding and A/V sync.
+        await this.command(['seek', resume, 'absolute+exact']);
+      }
+      await this.setProperty('pause', false);
+    } catch (err) {
+      console.warn('[mpv] post-load resume failed:', err);
+    }
+
+    this.state.loaded = true;
+    this.state.buffering = false;
+    this.emit(true);
   }
 
   onProperty(name, value) {
@@ -284,6 +305,13 @@ class MpvController {
       case 'track-list':
         if (Array.isArray(value)) s.tracks = value;
         break;
+      case 'aid':
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          s.audioId = value;
+        } else if (value === 'no' || value === null || value === undefined) {
+          s.audioId = null;
+        }
+        break;
       default:
         return;
     }
@@ -307,6 +335,26 @@ class MpvController {
     return this.command(['set_property', name, value]);
   }
 
+  async switchAudioTrack(id) {
+    const trackId = Number(id);
+    if (!Number.isFinite(trackId)) {
+      throw new Error('Invalid audio track id');
+    }
+    const audioTracks = (this.state.tracks || []).filter((t) => t.type === 'audio');
+    if (!audioTracks.some((t) => t.id === trackId)) {
+      throw new Error('Audio track is not available');
+    }
+    await this.setProperty('aid', trackId);
+    try {
+      await this.setProperty('audio-channels', 'auto');
+    } catch {
+      // optional recovery
+    }
+    await this.setProperty('mute', false);
+    await this.setProperty('volume', Math.max(0, Math.min(100, this.state.volume ?? 100)));
+    return undefined;
+  }
+
   async run(action, value) {
     switch (action) {
       case 'toggle-pause': return this.command(['cycle', 'pause']);
@@ -317,7 +365,7 @@ class MpvController {
       case 'volume': return this.setProperty('volume', Math.max(0, Math.min(100, value)));
       case 'mute': return this.setProperty('mute', Boolean(value));
       case 'speed': return this.setProperty('speed', value);
-      case 'audio-track': return this.setProperty('aid', value);
+      case 'audio-track': return this.switchAudioTrack(value);
       case 'subtitle-track': return this.setProperty('sid', value === null ? 'no' : value);
       case 'add-subtitle': return this.command(['sub-add', value.path, value.select ? 'select' : 'auto']);
       case 'subtitle-style': return this.applySubtitleStyle(value);
@@ -376,6 +424,7 @@ class MpvController {
     this.socket?.destroy();
     this.socket = null;
     this.process = null;
+    this.resumeAfterLoad = null;
   }
 }
 

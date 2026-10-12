@@ -1,5 +1,6 @@
 import type { LocalFile } from '../components/NetflixUI';
 import { getItemGenres } from './grouping';
+import { getCachedForVideo } from './tmdb';
 import {
   isWatched,
   isSeriesWatched,
@@ -21,6 +22,7 @@ export interface CatalogFilters {
   lengthMax: number;
   decade: string;
   customYear: string;
+  director: string;
 }
 
 export const DEFAULT_CATALOG_FILTERS: CatalogFilters = {
@@ -31,6 +33,7 @@ export const DEFAULT_CATALOG_FILTERS: CatalogFilters = {
   lengthMax: LENGTH_SLIDER_MAX,
   decade: 'any',
   customYear: '',
+  director: '',
 };
 
 export function countActiveFilters(filters: CatalogFilters): number {
@@ -40,6 +43,7 @@ export function countActiveFilters(filters: CatalogFilters): number {
   if (filters.genres.length > 0) n++;
   if (filters.lengthMin > 0 || filters.lengthMax < LENGTH_SLIDER_MAX) n++;
   if (filters.decade !== 'any' || filters.customYear.trim()) n++;
+  if (filters.director.trim()) n++;
   return n;
 }
 
@@ -89,6 +93,15 @@ function getItemYear(item: LocalFile): number | null {
   if (!y) return null;
   const parsed = parseInt(y, 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function matchesDirectorFilter(item: LocalFile, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const cached = getCachedForVideo(item);
+  if (cached?.director?.toLowerCase().includes(q)) return true;
+  if (cached?.cast?.some((name) => name.toLowerCase().includes(q))) return true;
+  return false;
 }
 
 export function matchesYearFilter(item: LocalFile, decade: string, customYear: string): boolean {
@@ -168,6 +181,7 @@ export function applyCatalogFilters(
       matchesWatchedFilter(item, filters.watched, progresses, profileId) &&
       matchesGenre(item, filters.genres) &&
       matchesLengthRange(item, filters.lengthMin, filters.lengthMax) &&
-      matchesYearFilter(item, filters.decade, filters.customYear),
+      matchesYearFilter(item, filters.decade, filters.customYear) &&
+      matchesDirectorFilter(item, filters.director),
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Plus, ChevronLeft, ChevronRight, X, Edit2, Save, Shuffle, FolderOpen, Eye, EyeOff } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, X, Edit2, Save, Shuffle, FolderOpen, Eye, EyeOff, MoreVertical, BookmarkPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   formatTmdbGenres,
@@ -33,6 +33,11 @@ import {
   setSeriesWatched,
   setEpisodesWatched,
 } from '../utils/watched';
+import { UserListsMenu, VideoCardListButton } from './UserListsMenu';
+import { UserListGridModal } from './UserListGridModal';
+import { listKindForVideo } from '../utils/userLists';
+import { ThemedSelect, GRID_SORT_OPTIONS, GRID_FILTER_OPTIONS } from './ThemedSelect';
+import { ConfirmDialog } from './ConfirmDialog';
 
 // --- Types ---
 export interface LocalFile {
@@ -209,7 +214,7 @@ export function GridViewModal({
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
-          className="flex flex-col flex-1 overflow-hidden"
+          className="flex flex-col flex-1 min-h-0 overflow-visible"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-10 pb-4 shrink-0">
@@ -225,30 +230,24 @@ export function GridViewModal({
           {(sortable || showRandomPlay || (activeProfileId && mediaType)) && (
             <div className="flex items-center gap-4 px-10 pb-6 shrink-0 flex-wrap">
               {sortable && (
-                <select
+                <ThemedSelect
                   value={sort}
-                  onChange={(e) => setSort(e.target.value as GridSort)}
-                  className="bg-[#242424] text-white border border-gray-600 rounded px-4 py-2 text-sm font-semibold outline-none focus:border-white transition"
-                >
-                  <option value="az">A–Z</option>
-                  <option value="za">Z–A</option>
-                  <option value="year-new">Newest year</option>
-                  <option value="year-old">Oldest year</option>
-                  <option value="recent">Recently added</option>
-                  <option value="duration-short">Shortest</option>
-                  <option value="duration-long">Longest</option>
-                </select>
+                  onChange={setSort}
+                  options={GRID_SORT_OPTIONS}
+                  className="w-auto"
+                  buttonClassName="w-auto min-w-[10rem]"
+                  menuZIndex={550}
+                />
               )}
               {activeProfileId && mediaType && (
-                <select
+                <ThemedSelect
                   value={filter}
-                  onChange={(e) => setFilter(e.target.value as GridFilter)}
-                  className="bg-[#242424] text-white border border-gray-600 rounded px-4 py-2 text-sm font-semibold outline-none focus:border-white transition"
-                >
-                  <option value="all">All</option>
-                  <option value="unwatched">Unwatched</option>
-                  <option value="watched">Watched</option>
-                </select>
+                  onChange={setFilter}
+                  options={GRID_FILTER_OPTIONS}
+                  className="w-auto"
+                  buttonClassName="w-auto min-w-[9rem]"
+                  menuZIndex={550}
+                />
               )}
               {showRandomPlay && (
                 <button
@@ -261,10 +260,11 @@ export function GridViewModal({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto px-10 pb-10">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-16">
+          <div className="flex-1 overflow-y-auto px-10 pl-14 pb-10 min-h-0 overscroll-contain">
+            <div className="pt-32 pl-4 pr-6 pb-12 overflow-visible">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-20 overflow-visible">
               {sortedVideos.map((video, i) => (
-                <div key={`${video.path}-${i}`} className="relative hover:z-[600]">
+                <div key={`${video.path}-${i}`} className="relative hover:z-[600] overflow-visible">
                   <VideoCard
                     video={video}
                     onPlay={(v) => { onClose(); onPlay(v); }}
@@ -274,9 +274,11 @@ export function GridViewModal({
                     progress={cardProgress(video, progresses)}
                     watched={getVideoWatched(video, progresses, activeProfileId)}
                     watchedIndicatorMode={watchedIndicatorMode}
+                    activeProfileId={activeProfileId}
                   />
                 </div>
               ))}
+            </div>
             </div>
           </div>
         </motion.div>
@@ -330,6 +332,7 @@ export function DetailModal({
   onWatchedChange,
   watchedIndicatorMode = 'always',
   watchedRevision = 0,
+  detailModalActionsMode = 'menu',
 }: {
   video: LocalFile;
   onClose: () => void;
@@ -342,6 +345,7 @@ export function DetailModal({
   onWatchedChange?: () => void;
   watchedIndicatorMode?: Settings['watchedIndicatorMode'];
   watchedRevision?: number;
+  detailModalActionsMode?: Settings['detailModalActionsMode'];
 }) {
   const useLocalOnly = isTmdbDisabled(video);
   const tmdb = useTMDBDetails(video);
@@ -356,6 +360,10 @@ export function DetailModal({
     useSeriesThumbnailForEpisodes: getMediaOverride(video.path)?.useSeriesThumbnailForEpisodes ?? false,
   });
   const [editError, setEditError] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [heroOverflowOpen, setHeroOverflowOpen] = useState(false);
+  const [heroListsOpen, setHeroListsOpen] = useState(false);
+  const heroOverflowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setEditForm({
@@ -369,7 +377,21 @@ export function DetailModal({
     });
     setEditError(null);
     setIsEditing(false);
+    setShowResetConfirm(false);
+    setHeroOverflowOpen(false);
+    setHeroListsOpen(false);
   }, [video.path, video.meta?.title, video.meta?.description, video.meta?.genre, video.meta?.year, video.name, video.tmdbDisabled]);
+
+  useEffect(() => {
+    if (!heroOverflowOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (heroOverflowRef.current && !heroOverflowRef.current.contains(e.target as Node)) {
+        setHeroOverflowOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [heroOverflowOpen]);
 
   const handleSaveEdits = () => {
     const trimmedTmdbId = editForm.tmdbId.trim();
@@ -599,13 +621,82 @@ export function DetailModal({
                 >
                   <Play className="w-6 h-6 fill-black" /> Play
                 </button>
-                {onUpdate && (
+                {detailModalActionsMode === 'icons' && onUpdate && (
                   <button
+                    type="button"
                     onClick={() => setIsEditing(!isEditing)}
-                    className="flex items-center gap-2 bg-gray-600/80 text-white px-6 py-2 rounded font-bold hover:bg-gray-500/80 transition"
+                    aria-label={isEditing ? 'Cancel edit' : 'Edit metadata'}
+                    className="flex items-center justify-center w-10 h-10 rounded bg-gray-600/80 text-white hover:bg-gray-500/80 transition"
                   >
-                    <Edit2 className="w-5 h-5" /> {isEditing ? 'Cancel Edit' : 'Edit'}
+                    <Edit2 className="w-5 h-5" />
                   </button>
+                )}
+                {activeProfileId && detailModalActionsMode === 'icons' && (
+                  <UserListsMenu
+                    profileId={activeProfileId}
+                    itemPath={video.path}
+                    kind={listKindForVideo(video)}
+                    variant="icon-detail"
+                  />
+                )}
+                {detailModalActionsMode === 'menu' && (onUpdate || activeProfileId) && (
+                  <>
+                    {heroListsOpen && activeProfileId ? (
+                      <UserListsMenu
+                        profileId={activeProfileId}
+                        itemPath={video.path}
+                        kind={listKindForVideo(video)}
+                        variant="icon-detail"
+                        open={heroListsOpen}
+                        onOpenChange={(open) => {
+                          setHeroListsOpen(open);
+                          if (!open) setHeroOverflowOpen(false);
+                        }}
+                      />
+                    ) : (
+                      <div className="relative" ref={heroOverflowRef}>
+                        <button
+                          type="button"
+                          aria-label="More actions"
+                          aria-expanded={heroOverflowOpen}
+                          onClick={() => setHeroOverflowOpen((o) => !o)}
+                          className="flex items-center justify-center w-10 h-10 rounded bg-gray-600/80 text-white hover:bg-gray-500/80 transition"
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
+                        {heroOverflowOpen && (
+                          <div className="absolute left-0 top-full mt-2 z-[300] min-w-[11rem] rounded-lg border border-white/15 bg-[#2a2a2a] shadow-2xl py-1 overflow-hidden">
+                            {onUpdate && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsEditing(!isEditing);
+                                  setHeroOverflowOpen(false);
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-white hover:bg-white/10 transition"
+                              >
+                                <Edit2 className="w-4 h-4 shrink-0" />
+                                {isEditing ? 'Cancel edit' : 'Edit metadata'}
+                              </button>
+                            )}
+                            {activeProfileId && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setHeroOverflowOpen(false);
+                                  setHeroListsOpen(true);
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-white hover:bg-white/10 transition"
+                              >
+                                <BookmarkPlus className="w-4 h-4 shrink-0" />
+                                Lists
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -734,17 +825,7 @@ export function DetailModal({
                     {onReset && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (
-                            !confirm(
-                              'Reset this title to its default metadata? Manual edits and TMDB overrides will be removed.',
-                            )
-                          ) {
-                            return;
-                          }
-                          onReset(video.path);
-                          setIsEditing(false);
-                        }}
+                        onClick={() => setShowResetConfirm(true)}
                         className="text-sm text-red-400 hover:text-red-300 font-semibold transition"
                       >
                         Reset to default
@@ -778,15 +859,14 @@ export function DetailModal({
                         </button>
                       )}
                       {subfolderNames.length > 1 && (
-                        <select 
+                        <ThemedSelect
                           value={selectedSubfolder}
-                          onChange={(e) => setSelectedSubfolder(e.target.value)}
-                          className="bg-[#242424] text-white border border-gray-600 rounded px-4 py-2 font-semibold outline-none focus:border-white transition"
-                        >
-                          {subfolderNames.map(name => (
-                            <option key={name} value={name}>{name}</option>
-                          ))}
-                        </select>
+                          onChange={setSelectedSubfolder}
+                          options={subfolderNames.map((name) => ({ value: name, label: name }))}
+                          className="w-auto min-w-[8rem]"
+                          buttonClassName="w-auto min-w-[8rem]"
+                          menuZIndex={250}
+                        />
                       )}
                     </div>
                   </div>
@@ -905,6 +985,21 @@ export function DetailModal({
           </div>
         </motion.div>
       </motion.div>
+      <ConfirmDialog
+        open={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={() => {
+          onReset?.(video.path);
+          setIsEditing(false);
+          setShowResetConfirm(false);
+        }}
+        title="Reset metadata?"
+        confirmLabel="Reset"
+        danger
+        zIndex={700}
+      >
+        Reset this title to its default metadata? Manual edits and TMDB overrides will be removed.
+      </ConfirmDialog>
     </AnimatePresence>
   );
 }
@@ -919,6 +1014,7 @@ export function VideoCard({
   watchedIndicatorMode = 'always',
   variant = 'carousel',
   enableHoverExpansion = false,
+  activeProfileId,
 }: {
   video: LocalFile;
   onPlay: (v: LocalFile) => void;
@@ -928,8 +1024,10 @@ export function VideoCard({
   watchedIndicatorMode?: Settings['watchedIndicatorMode'];
   variant?: 'carousel' | 'grid';
   enableHoverExpansion?: boolean;
+  activeProfileId?: string | null;
 }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [listPickerOpen, setListPickerOpen] = useState(false);
   const hoverTimeoutRef = useRef<number | null>(null);
   const useLocalOnly = isTmdbDisabled(video);
   const tmdb = useTMDB(video);
@@ -954,6 +1052,7 @@ export function VideoCard({
 
   const handleMouseLeave = () => {
     if (!allowHover) return;
+    if (listPickerOpen) return;
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     setIsHovered(false);
   };
@@ -1058,9 +1157,11 @@ export function VideoCard({
                   <button onClick={(e) => { e.stopPropagation(); onPlay(playTarget); }} className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-gray-200 transition">
                     <Play className="w-4 h-4 fill-black text-black ml-0.5" />
                   </button>
-                  <button className="w-8 h-8 bg-transparent border-2 border-gray-500 rounded-full flex items-center justify-center hover:border-white transition text-white">
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <VideoCardListButton
+                    video={video}
+                    activeProfileId={activeProfileId}
+                    onOpenChange={setListPickerOpen}
+                  />
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); onInfo(video); }} className="w-8 h-8 bg-transparent border-2 border-gray-500 rounded-full flex items-center justify-center hover:border-white transition text-white">
                   <ChevronRight className="w-4 h-4 rotate-90" />
@@ -1147,6 +1248,9 @@ export function ContentRow({
   expandable = false,
   activeProfileId,
   watchedIndicatorMode = 'always',
+  mediaType: mediaTypeProp,
+  userListId,
+  bulkAddCatalog,
 }: {
   title: string;
   videos: LocalFile[];
@@ -1157,6 +1261,9 @@ export function ContentRow({
   expandable?: boolean;
   activeProfileId?: string | null;
   watchedIndicatorMode?: Settings['watchedIndicatorMode'];
+  mediaType?: 'movie' | 'tv';
+  userListId?: string;
+  bulkAddCatalog?: LocalFile[];
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -1186,10 +1293,10 @@ export function ContentRow({
     }
   };
 
-  if (videos.length === 0) return null;
+  if (videos.length === 0 && !userListId) return null;
 
   const mediaType: 'movie' | 'tv' | undefined =
-    title === 'Movies' ? 'movie' : title === 'Series' ? 'tv' : undefined;
+    mediaTypeProp ?? (title === 'Movies' ? 'movie' : title === 'Series' ? 'tv' : undefined);
 
   return (
     <div className="mb-8 relative group z-20 hover:z-50">
@@ -1211,7 +1318,20 @@ export function ContentRow({
         )}
       </div>
 
-      {showGrid && (
+      {showGrid && userListId && activeProfileId && bulkAddCatalog && (
+        <UserListGridModal
+          profileId={activeProfileId}
+          listId={userListId}
+          catalog={bulkAddCatalog}
+          onClose={() => setShowGrid(false)}
+          onPlay={(v) => { setShowGrid(false); onPlay(v); }}
+          onInfo={(v) => { setShowGrid(false); onInfo(v); }}
+          onListDeleted={() => setShowGrid(false)}
+          progresses={progresses}
+          watchedIndicatorMode={watchedIndicatorMode}
+        />
+      )}
+      {showGrid && !(userListId && activeProfileId && bulkAddCatalog) && (
         <GridViewModal
           title={title}
           videos={videos}
@@ -1271,6 +1391,7 @@ export function ContentRow({
                   progress={cardProgress(video, progresses)}
                   watched={getVideoWatched(video, progresses, activeProfileId)}
                   watchedIndicatorMode={watchedIndicatorMode}
+                  activeProfileId={activeProfileId}
                 />
               </div>
             </div>

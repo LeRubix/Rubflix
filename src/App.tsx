@@ -54,6 +54,9 @@ import {
 } from './utils/appUpdate';
 import { UpdateAvailableNotice } from './components/UpdateAvailableNotice';
 import { resolveAppVersion } from './utils/appVersion';
+import { useUserLists } from './hooks/useUserLists';
+import { pruneLists, resolveListVideos } from './utils/userLists';
+import { ManageListsModal } from './components/ManageListsModal';
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
@@ -86,6 +89,10 @@ export default function App() {
   const [tmdbCacheTick, setTmdbCacheTick] = useState(0);
   const [appUpdateInfo, setAppUpdateInfo] = useState<AppUpdateInfo | null>(null);
   const [updateNoticeDismissed, setUpdateNoticeDismissed] = useState(false);
+  const [showManageLists, setShowManageLists] = useState(false);
+  const [manageListsKind, setManageListsKind] = useState<'movie' | 'tv'>('movie');
+
+  const userLists = useUserLists(activeProfile);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,7 +308,6 @@ export default function App() {
     if (!hasFolders) return;
 
     if (!window.electronAPI) {
-      alert("Run this inside Electron!");
       return;
     }
 
@@ -533,6 +539,27 @@ export default function App() {
       heroCatalog,
     };
   }, [files, progresses, activeProfile, overrideTick, tmdbCacheTick]);
+
+  const { movieListRows, tvListRows } = useMemo(() => {
+    const movieCatalog = movies;
+    const tvCatalog = folders;
+    const movieListRows = userLists
+      .filter((l) => l.kind === 'movie')
+      .map((list) => ({ list, videos: resolveListVideos(list, movieCatalog) }));
+    const tvListRows = userLists
+      .filter((l) => l.kind === 'tv')
+      .map((list) => ({ list, videos: resolveListVideos(list, tvCatalog) }));
+    return { movieListRows, tvListRows };
+  }, [userLists, movies, folders]);
+
+  useEffect(() => {
+    if (!activeProfile) return;
+    const valid = new Set([
+      ...movies.map((m) => m.path),
+      ...folders.map((f) => f.path),
+    ]);
+    pruneLists(activeProfile, valid);
+  }, [activeProfile, movies, folders]);
 
   // Dynamic Hero Banner
   const [featuredIndex, setFeaturedIndex] = useState(0);
@@ -832,6 +859,20 @@ export default function App() {
 
           {/* Carousel Rows — hidden while search is open */}
           <div className={`px-2 relative z-10 flex-grow pb-20 ${showSearch ? 'hidden' : featured ? '-mt-32' : ''}`}>
+            {(activeTab === 'movies' || activeTab === 'tv') && !showSearch && (
+              <div className="flex justify-end px-8 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManageListsKind(activeTab === 'tv' ? 'tv' : 'movie');
+                    setShowManageLists(true);
+                  }}
+                  className="text-sm font-semibold text-gray-400 hover:text-white transition pointer-events-auto"
+                >
+                  Manage lists
+                </button>
+              </div>
+            )}
             {activeTab === 'home' && top10.length > 0 && (
               <ContentRow title="Top 10 in Your House Today" videos={top10} onPlay={handlePlayVideo} onInfo={setInfoVideo} isTop10={true} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
@@ -844,6 +885,38 @@ export default function App() {
             {(activeTab === 'home' || activeTab === 'movies') && continueWatchingMovies.length > 0 && (
               <ContentRow title="Continue Watching" videos={continueWatchingMovies} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
+            {activeTab === 'movies' && movieListRows.map(({ list, videos }) => (
+              <ContentRow
+                key={`user-list-${list.id}`}
+                title={list.name}
+                videos={videos}
+                onPlay={handlePlayVideo}
+                onInfo={setInfoVideo}
+                progresses={progresses}
+                expandable
+                mediaType="movie"
+                activeProfileId={activeProfile}
+                watchedIndicatorMode={settings.watchedIndicatorMode}
+                userListId={list.id}
+                bulkAddCatalog={movies}
+              />
+            ))}
+            {activeTab === 'tv' && tvListRows.map(({ list, videos }) => (
+              <ContentRow
+                key={`user-list-${list.id}`}
+                title={list.name}
+                videos={videos}
+                onPlay={handlePlayVideo}
+                onInfo={setInfoVideo}
+                progresses={progresses}
+                expandable
+                mediaType="tv"
+                activeProfileId={activeProfile}
+                watchedIndicatorMode={settings.watchedIndicatorMode}
+                userListId={list.id}
+                bulkAddCatalog={folders}
+              />
+            ))}
             
             {activeTab === 'home' && heroCatalog.length > 0 && (
               <ContentRow title="Home" videos={heroCatalog} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
@@ -888,6 +961,14 @@ export default function App() {
         </>
       )}
 
+      {showManageLists && activeProfile && (
+        <ManageListsModal
+          profileId={activeProfile}
+          defaultKind={manageListsKind}
+          onClose={() => setShowManageLists(false)}
+        />
+      )}
+
       {/* Detail Modal */}
       {infoVideo && (
         <DetailModal
@@ -903,6 +984,7 @@ export default function App() {
           activeProfileId={activeProfile}
           onWatchedChange={handleWatchedChange}
           watchedIndicatorMode={settings.watchedIndicatorMode}
+          detailModalActionsMode={settings.detailModalActionsMode}
         />
       )}
 

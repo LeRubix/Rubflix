@@ -26,6 +26,7 @@ const INITIAL_STATE: PlayerState = {
   loaded: false,
   error: null,
   tracks: [],
+  audioId: null,
 };
 
 type Flash = { kind: 'play' | 'pause' | 'back' | 'forward'; key: number } | null;
@@ -46,6 +47,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
   stateRef.current = state;
   const externalSubsRef = useRef<ExternalSubtitleFile[]>([]);
   const subsInitialized = useRef(false);
+  const audioReconciledPath = useRef<string | null>(null);
   const requestedNext = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,6 +66,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
   useEffect(() => {
     let cancelled = false;
     subsInitialized.current = false;
+    audioReconciledPath.current = null;
     requestedNext.current = false;
 
     (async () => {
@@ -72,7 +75,6 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
       externalSubsRef.current = external;
 
       const subPref = getSubtitlePref(session.profileId, session.path);
-      const audioPref = getAudioPref(session.profileId, session.path);
       const { volume: vol, muted: mute } = loadPlayerVolume();
 
       const style = loadSubtitleStyle();
@@ -82,7 +84,6 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
         startTime: session.startTime > 5 ? session.startTime : 0,
         subtitleStyle: subtitleStyleToMpv(style),
       };
-      if (audioPref) options.audioId = audioPref;
       if (subPref?.type === 'off' || subPref?.type === 'external' || (!subPref && external.length > 0)) {
         options.subtitleId = 'no';
       } else if (subPref?.type === 'embedded') {
@@ -128,6 +129,28 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     })();
   }, [state.loaded, session.profileId, session.path, cmd]);
 
+  useEffect(() => {
+    if (!state.loaded || audioReconciledPath.current === session.path) return;
+    const audioTracks = state.tracks.filter((t) => t.type === 'audio');
+    if (audioTracks.length === 0) return;
+
+    audioReconciledPath.current = session.path;
+    const pref = getAudioPref(session.profileId, session.path);
+    const prefTrack = pref != null ? audioTracks.find((t) => t.id === pref) : undefined;
+    const defaultTrack = audioTracks.find((t) => t.default) ?? audioTracks[0];
+    const targetId = prefTrack?.id ?? defaultTrack.id;
+    const correctingPref = pref != null && !prefTrack;
+
+    (async () => {
+      const result = await api.playerCommand('audio-track', targetId);
+      if (!result.ok) {
+        console.warn('[audio-track]', result.error);
+        return;
+      }
+      if (correctingPref) saveAudioPref(session.profileId, session.path, targetId);
+    })();
+  }, [state.loaded, state.tracks, session.path, session.profileId, api]);
+
   const showFlash = (kind: NonNullable<Flash>['kind']) => setFlash({ kind, key: Date.now() });
 
   const togglePause = useCallback(() => {
@@ -159,10 +182,15 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     });
   }, [cmd]);
 
-  const selectAudio = useCallback((id: number) => {
-    cmd('audio-track', id);
+  const selectAudio = useCallback(async (id: number) => {
+    if (stateRef.current.audioId === id) return;
+    const result = await api.playerCommand('audio-track', id);
+    if (!result.ok) {
+      console.warn('[audio-track]', result.error);
+      return;
+    }
     saveAudioPref(session.profileId, session.path, id);
-  }, [cmd, session.profileId, session.path]);
+  }, [api, session.profileId, session.path]);
 
   const selectSubtitle = useCallback((id: number | null) => {
     cmd('subtitle-track', id);
@@ -256,7 +284,8 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
 
   const audioTracks = state.tracks.filter((t) => t.type === 'audio');
   const subtitleTracks = state.tracks.filter((t) => t.type === 'sub');
-  const selectedAudioId = audioTracks.find((t) => t.selected)?.id ?? null;
+  const selectedAudioId =
+    state.audioId ?? audioTracks.find((t) => t.selected)?.id ?? null;
   const selectedSubtitleId = subtitleTracks.find((t) => t.selected)?.id ?? null;
   const loading = !error && (!state.loaded || state.buffering);
 

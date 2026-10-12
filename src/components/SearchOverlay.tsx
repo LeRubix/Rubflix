@@ -124,7 +124,7 @@ export function SearchOverlay({
           <div className="flex flex-1 min-h-0">
             <SearchFilterSidebar filters={filters} onChange={setFilters} genres={availableGenres} />
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-10 pb-10 pt-4">
+            <div className="flex-1 overflow-y-auto px-6 md:px-10 pl-10 md:pl-14 pb-10 pt-4 min-h-0 overscroll-contain">
               {results.length === 0 ? (
                 <p className="text-gray-500 text-lg mt-8">
                   {query ? `No results for "${query}"` : 'No titles match your filters'}
@@ -144,9 +144,10 @@ export function SearchOverlay({
                     </>
                   )}
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-8 pt-4 pb-4">
+                <div className="pt-32 pl-4 pr-6 pb-12 overflow-visible">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-20 overflow-visible">
                   {results.map((video, i) => (
-                    <div key={`${video.path}-${i}`} className="relative hover:z-[600]">
+                    <div key={`${video.path}-${i}`} className="relative hover:z-[600] overflow-visible">
                       <VideoCard
                         video={video}
                         onPlay={(v) => { onClose(); onPlay(v); }}
@@ -156,9 +157,11 @@ export function SearchOverlay({
                         progress={cardProgress(video, progresses)}
                         watched={getVideoWatched(video, progresses, activeProfileId)}
                         watchedIndicatorMode={watchedIndicatorMode}
+                        activeProfileId={activeProfileId}
                       />
                     </div>
                   ))}
+                </div>
                 </div>
                 </>
               )}

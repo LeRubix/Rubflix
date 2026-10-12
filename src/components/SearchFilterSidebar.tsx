@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, Filter, Clock, Eye, Calendar, Tag, Film } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronLeft, ChevronRight, Filter, Clock, Eye, Calendar, Tag, Film, Clapperboard } from 'lucide-react';
+import { ThemedSelect } from './ThemedSelect';
 import {
   type CatalogFilters,
   type WatchedFilter,
@@ -10,71 +11,6 @@ import {
   LENGTH_SLIDER_STEP,
   RELEASE_DECADES,
 } from '../utils/catalogFilters';
-
-function FilterSelect<T extends string>({
-  value,
-  onChange,
-  options,
-  disabled = false,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
-
-  const selected = options.find((o) => o.value === value);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center justify-between gap-2 bg-[#242424] border rounded px-3 py-2.5 text-sm font-semibold text-white outline-none transition disabled:opacity-50 ${
-          open ? 'border-white' : 'border-gray-600 hover:border-gray-400'
-        }`}
-      >
-        <span className="truncate">{selected?.label ?? value}</span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 z-[200] bg-[#242424] border border-gray-600 rounded shadow-[0_4px_20px_rgba(0,0,0,0.5)] max-h-52 overflow-y-auto py-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition ${
-                opt.value === value
-                  ? 'text-white bg-white/10'
-                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function CollapseButton({ onClick, direction }: { onClick: () => void; direction: 'expand' | 'collapse' }) {
   return (
@@ -106,10 +42,13 @@ export function SearchFilterSidebar({
   filters,
   onChange,
   genres,
+  lockMediaType,
 }: {
   filters: CatalogFilters;
   onChange: (filters: CatalogFilters) => void;
   genres: string[];
+  /** When set, hides the media-type control (e.g. list is movies-only). */
+  lockMediaType?: 'movie' | 'tv';
 }) {
   const [expanded, setExpanded] = useState(false);
   const activeCount = countActiveFilters(filters);
@@ -173,25 +112,43 @@ export function SearchFilterSidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-visible px-4 py-4 space-y-5 min-h-0">
+        {!lockMediaType && (
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+              <Film className="w-3.5 h-3.5" /> Media type
+            </label>
+            <ThemedSelect
+              value={filters.mediaType}
+              onChange={(v) => onChange({ ...filters, mediaType: v })}
+              options={MEDIA_TYPE_OPTIONS}
+              buttonClassName="px-3 py-2.5"
+            />
+          </div>
+        )}
+
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5 mb-2">
-            <Film className="w-3.5 h-3.5" /> Media type
+            <Clapperboard className="w-3.5 h-3.5" /> Director / cast
           </label>
-          <FilterSelect
-            value={filters.mediaType}
-            onChange={(v) => onChange({ ...filters, mediaType: v })}
-            options={MEDIA_TYPE_OPTIONS}
+          <input
+            type="text"
+            value={filters.director}
+            onChange={(e) => onChange({ ...filters, director: e.target.value })}
+            placeholder="e.g. Nolan"
+            className="w-full bg-[#242424] border border-gray-600 rounded px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-white hover:border-gray-400 transition placeholder:text-gray-500 placeholder:font-normal"
           />
+          <p className="text-[10px] text-gray-600 mt-1">Uses TMDB credits when available</p>
         </div>
 
         <div>
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5 mb-2">
             <Eye className="w-3.5 h-3.5" /> Watched
           </label>
-          <FilterSelect
+          <ThemedSelect
             value={filters.watched}
             onChange={(v) => onChange({ ...filters, watched: v })}
             options={WATCHED_OPTIONS}
+            buttonClassName="px-3 py-2.5"
           />
         </div>
 
@@ -284,11 +241,12 @@ export function SearchFilterSidebar({
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5 mb-2">
             <Calendar className="w-3.5 h-3.5" /> Release date
           </label>
-          <FilterSelect
+          <ThemedSelect
             value={filters.decade}
             onChange={(v) => onChange({ ...filters, decade: v, customYear: '' })}
             options={RELEASE_DECADES}
             disabled={!!filters.customYear.trim()}
+            buttonClassName="px-3 py-2.5"
           />
           <input
             type="text"

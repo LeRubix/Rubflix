@@ -28,6 +28,7 @@ declare global {
     loaded: boolean;
     error: string | null;
     tracks: MpvTrack[];
+    audioId: number | null;
   }
 
   interface PlayerSession {

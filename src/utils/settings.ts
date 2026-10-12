@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoSyncLibrary: true,
   customTmdbApiKey: '',
   watchedIndicatorMode: 'always' as const,
+  detailModalActionsMode: 'menu' as const,
 };
 
 export function loadSettings(): Settings {
@@ -85,6 +86,7 @@ export function loadSettings(): Settings {
           parsed.watchedIndicatorMode === 'hover' || parsed.watchedIndicatorMode === 'never'
             ? parsed.watchedIndicatorMode
             : 'always',
+        detailModalActionsMode: parsed.detailModalActionsMode === 'icons' ? 'icons' : 'menu',
       };
     }
 
