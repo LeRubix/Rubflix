@@ -91,6 +91,8 @@ declare global {
       getAppIconPath: (variant: 'default' | 'alternate') => Promise<string | null>;
       updateLibraryWatch: (folders: string[]) => Promise<{ ok: boolean }>;
       onLibraryChanged: (callback: () => void) => () => void;
+      onLibraryPathsRemoved: (callback: (paths: string[]) => void) => () => void;
+      pathExists: (filePath: string) => Promise<boolean>;
       showInExplorer: (filePath: string) => Promise<{ ok: boolean }>;
       selectFolder: () => Promise<string | null>;
       selectFolders: () => Promise<string[]>;

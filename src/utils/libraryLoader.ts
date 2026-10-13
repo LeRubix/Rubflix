@@ -4,6 +4,7 @@ import { resolveFileMeta } from './metadata';
 import { generateVideoThumbnail } from './thumbnail';
 import { runWithConcurrency } from './concurrency';
 import { getCachedDuration, setCachedDuration } from './mediaCache';
+import { isEnrichCancelled } from './enrichCancel';
 
 const ENRICH_CONCURRENCY = 6;
 const TV_ENRICH_SCAN_CAP = 200;
@@ -24,6 +25,8 @@ function needsEnrich(f: LocalFile | undefined): boolean {
 }
 
 async function probeDuration(videoPath: string): Promise<number> {
+  if (isEnrichCancelled(videoPath)) return 0;
+
   const cached = getCachedDuration(videoPath);
   if (cached && cached > 0) return cached;
 
@@ -81,14 +84,18 @@ export function buildOptimizedEnrichQueue(
   return result;
 }
 
-async function enrichOne(file: ScannedFile, category: 'movie' | 'tv'): Promise<LocalFile> {
+async function enrichOne(file: ScannedFile, category: 'movie' | 'tv'): Promise<LocalFile | null> {
+  if (isEnrichCancelled(file.path)) return null;
+
   const meta = resolveFileMeta(file, category);
   let thumbnail = file.localFanart || file.localPoster || meta.poster || undefined;
   const skipThumbnail = !!(file.localPoster || file.localFanart);
 
   let duration = await probeDuration(file.path);
+  if (isEnrichCancelled(file.path)) return null;
 
   const generated = await generateVideoThumbnail(file.path, skipThumbnail, file.mtimeMs);
+  if (isEnrichCancelled(file.path)) return null;
   if (!thumbnail && generated.thumbnail) {
     thumbnail = generated.thumbnail;
   }
@@ -144,7 +151,7 @@ export async function enrichLibraryInBackground(
 
   await runWithConcurrency(items, ENRICH_CONCURRENCY, async (item) => {
     const enriched = await enrichOne(item.file, item.category);
-    queueUpdate(enriched);
+    if (enriched) queueUpdate(enriched);
   });
 
   if (batchTimer) clearTimeout(batchTimer);
@@ -162,7 +169,7 @@ export async function enrichEpisodesBatch(
   const batch: LocalFile[] = [];
   await runWithConcurrency(toEnrich, ENRICH_CONCURRENCY, async (ep) => {
     const enriched = await enrichOne(toScannedFile(ep), 'tv');
-    batch.push(enriched);
+    if (enriched) batch.push(enriched);
   });
 
   if (batch.length > 0) onBatch(batch);

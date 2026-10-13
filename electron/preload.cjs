@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppIconPath: (variant) => ipcRenderer.invoke('get-app-icon-path', variant),
   updateLibraryWatch: (folders) => ipcRenderer.invoke('update-library-watch', folders),
   onLibraryChanged: (callback) => subscribe('library-changed', callback),
+  onLibraryPathsRemoved: (callback) => subscribe('library-paths-removed', callback),
+  pathExists: (filePath) => ipcRenderer.invoke('path-exists', filePath),
   showInExplorer: (filePath) => ipcRenderer.invoke('show-in-explorer', filePath),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   selectFolders: () => ipcRenderer.invoke('select-folders'),

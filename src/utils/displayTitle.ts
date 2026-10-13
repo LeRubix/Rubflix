@@ -8,7 +8,7 @@ export function getLibraryDisplayTitle(video: LocalFile): string {
   return video.meta?.title || video.name;
 }
 
-/** Primary title in the player chrome — series name for episodes, same as library for movies. */
+/** Primary title in the player chrome, series name for episodes, same as library for movies. */
 export function getPlayerDisplayTitle(video: LocalFile): string {
   if (video.isFolder) return getLibraryDisplayTitle(video);
 

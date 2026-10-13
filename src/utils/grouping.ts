@@ -1,7 +1,12 @@
 import type { LocalFile } from '../components/NetflixUI';
 import { applyMediaOverride, isTmdbDisabled } from './mediaOverrides';
+import { getSeasonGroupKey } from './episodeParsing';
 import { parseSeriesFolderName } from './metadata';
 import { getCachedForVideo } from './tmdb';
+
+function normPath(p: string): string {
+  return p.replace(/\//g, '\\').toLowerCase();
+}
 
 const JUNK_GENRES = new Set(['Local Media', 'Movie', 'Series', '']);
 
@@ -216,4 +221,33 @@ export function buildGenreRows(
     .filter(([, videos]) => videos.length >= minItems)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([title, videos]) => ({ title, videos }));
+}
+
+/** Open the series detail modal for an episode, with the season tab that contains it. */
+export function resolveShowDetailTarget(
+  files: LocalFile[],
+  file: LocalFile,
+): { show: LocalFile; seasonKey: string } | null {
+  if (file.isFolder || file.category !== 'tv') return null;
+  const targetKey = normPath(file.path);
+
+  for (const f of files) {
+    if (!f.isFolder || !f.folderFiles) continue;
+    for (const ep of f.folderFiles) {
+      if (normPath(ep.path) === targetKey) {
+        return { show: f, seasonKey: getSeasonGroupKey(ep.relativePath) };
+      }
+    }
+  }
+
+  const shows = files.filter((f) => f.category === 'tv' && !f.isFolder);
+  const folders = buildSeriesFolders(shows);
+  for (const show of folders) {
+    for (const ep of show.folderFiles ?? []) {
+      if (normPath(ep.path) === targetKey) {
+        return { show, seasonKey: getSeasonGroupKey(ep.relativePath) };
+      }
+    }
+  }
+  return null;
 }

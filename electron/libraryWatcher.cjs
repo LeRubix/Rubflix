@@ -4,8 +4,9 @@ const fs = require('fs');
 const DEBOUNCE_MS = 2000;
 
 class LibraryWatcher {
-  constructor(onChange) {
+  constructor(onChange, onPathsRemoved) {
     this.onChange = onChange;
+    this.onPathsRemoved = onPathsRemoved;
     this.watcher = null;
     this.debounceTimer = null;
   }
@@ -33,11 +34,18 @@ class LibraryWatcher {
       }, DEBOUNCE_MS);
     };
 
+    const notifyRemoved = (removedPath) => {
+      if (this.onPathsRemoved && removedPath) {
+        this.onPathsRemoved([removedPath]);
+      }
+      notify();
+    };
+
     this.watcher.on('add', notify);
     this.watcher.on('change', notify);
-    this.watcher.on('unlink', notify);
+    this.watcher.on('unlink', notifyRemoved);
     this.watcher.on('addDir', notify);
-    this.watcher.on('unlinkDir', notify);
+    this.watcher.on('unlinkDir', notifyRemoved);
   }
 
   stop() {

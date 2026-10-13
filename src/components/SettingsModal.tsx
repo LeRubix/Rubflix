@@ -325,7 +325,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                   menuZIndex={450}
                 />
                 <p className="text-xs text-gray-500 mt-2">
-                  Edit and Lists on the expanded title view — separate icons or combined under a ⋯ menu.
+                  Edit and Lists on the expanded title view, separate icons or combined under a ⋯ menu.
                 </p>
               </div>
 

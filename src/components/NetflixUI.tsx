@@ -38,6 +38,7 @@ import { UserListGridModal } from './UserListGridModal';
 import { listKindForVideo } from '../utils/userLists';
 import { ThemedSelect, GRID_SORT_OPTIONS, GRID_FILTER_OPTIONS } from './ThemedSelect';
 import { ConfirmDialog } from './ConfirmDialog';
+import { recordWatchHistoryFromMark } from '../utils/watchHistory';
 
 // --- Types ---
 export interface LocalFile {
@@ -333,6 +334,7 @@ export function DetailModal({
   watchedIndicatorMode = 'always',
   watchedRevision = 0,
   detailModalActionsMode = 'menu',
+  initialSubfolder,
 }: {
   video: LocalFile;
   onClose: () => void;
@@ -346,6 +348,8 @@ export function DetailModal({
   watchedIndicatorMode?: Settings['watchedIndicatorMode'];
   watchedRevision?: number;
   detailModalActionsMode?: Settings['detailModalActionsMode'];
+  /** When opening a series, pre-select this season folder (episode info from history, etc.). */
+  initialSubfolder?: string;
 }) {
   const useLocalOnly = isTmdbDisabled(video);
   const tmdb = useTMDBDetails(video);
@@ -419,19 +423,25 @@ export function DetailModal({
   const toggleMovieWatched = (checked: boolean) => {
     if (!activeProfileId || video.isFolder) return;
     setManualWatched(activeProfileId, video.path, checked);
+    if (checked) void recordWatchHistoryFromMark(activeProfileId, [video], progresses);
     onWatchedChange?.();
   };
 
   const toggleEpisodeWatched = (ep: LocalFile) => {
     if (!activeProfileId) return;
     const w = isWatched(ep, progresses, activeProfileId);
-    setManualWatched(activeProfileId, ep.path, w ? false : true);
+    const markingWatched = !w;
+    setManualWatched(activeProfileId, ep.path, markingWatched);
+    if (markingWatched) void recordWatchHistoryFromMark(activeProfileId, [ep], progresses);
     onWatchedChange?.();
   };
 
   const toggleSeriesWatched = (checked: boolean) => {
     if (!activeProfileId || !video.isFolder) return;
     setSeriesWatched(activeProfileId, video, checked ? true : null);
+    if (checked && video.folderFiles?.length) {
+      void recordWatchHistoryFromMark(activeProfileId, video.folderFiles, progresses);
+    }
     onWatchedChange?.();
   };
 
@@ -440,6 +450,9 @@ export function DetailModal({
     const seasonEps = subfolders[selectedSubfolder] ?? [];
     setEpisodesWatched(activeProfileId, seasonEps, checked ? true : null);
     if (!checked) setManualWatched(activeProfileId, video.path, null);
+    if (checked && seasonEps.length) {
+      void recordWatchHistoryFromMark(activeProfileId, seasonEps, progresses);
+    }
     onWatchedChange?.();
   };
 
@@ -465,12 +478,19 @@ export function DetailModal({
   }, [video.isFolder, video.folderFiles, video.path]);
 
   const subfolderNames = Object.keys(subfolders).sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
-  
+  const subfolderNamesKey = subfolderNames.join('\0');
+
   useEffect(() => {
-    if (subfolderNames.length > 0 && !selectedSubfolder) {
-      setSelectedSubfolder(subfolderNames[0]);
+    if (subfolderNames.length === 0) {
+      setSelectedSubfolder('');
+      return;
     }
-  }, [subfolderNames, selectedSubfolder]);
+    if (initialSubfolder && subfolderNames.includes(initialSubfolder)) {
+      setSelectedSubfolder(initialSubfolder);
+    } else {
+      setSelectedSubfolder(subfolderNames[0]!);
+    }
+  }, [video.path, initialSubfolder, subfolderNamesKey]);
 
   const episodesToRender = subfolders[selectedSubfolder] || [];
   const visibleEpisodes = hideWatchedEpisodes

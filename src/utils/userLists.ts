@@ -47,7 +47,7 @@ function writeLists(profileId: string, lists: UserList[]): void {
 const EMPTY_LISTS: UserList[] = [];
 const snapshotCache = new Map<string, { key: string; value: UserList[] }>();
 
-/** Stable snapshot for useSyncExternalStore — same reference until data changes. */
+/** Stable snapshot for useSyncExternalStore, same reference until data changes. */
 export function getListsSnapshot(profileId: string | null): UserList[] {
   if (!profileId) return EMPTY_LISTS;
   const lists = readLists(profileId);

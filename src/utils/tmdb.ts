@@ -769,7 +769,7 @@ async function fetchSeasonEpisodeMeta(tvId: number, season: number): Promise<voi
     saveEpisodeCache(cache);
     markSeasonBulkFetched(tvId, season, true);
   } catch {
-    // ignore — DetailModal retry will attempt again
+    // ignore, DetailModal retry will attempt again
   }
 }
 
@@ -803,7 +803,7 @@ async function fetchEpisodeMeta(
 
   if (!navigator.onLine || !hasTmdbApiKey()) return null;
 
-  // Try bulk season fetch first — one call covers every episode in the season.
+  // Try bulk season fetch first, one call covers every episode in the season.
   await ensureSeasonEpisodeMeta(tvId, season);
   if (key in getEpisodeCache()) return getEpisodeCache()[key];
 

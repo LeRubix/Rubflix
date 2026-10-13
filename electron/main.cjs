@@ -30,11 +30,18 @@ function applyAppIcon(variant) {
   return true;
 }
 
-const libraryWatcher = new LibraryWatcher(() => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('library-changed');
-  }
-});
+const libraryWatcher = new LibraryWatcher(
+  () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('library-changed');
+    }
+  },
+  (paths) => {
+    if (mainWindow && !mainWindow.isDestroyed() && Array.isArray(paths) && paths.length > 0) {
+      mainWindow.webContents.send('library-paths-removed', paths);
+    }
+  },
+);
 
 mpvController.onStateChange = (state) => {
   playerWindows?.sendToControls('player-state', state);
@@ -134,6 +141,12 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  app.on('browser-window-focus', (_event, window) => {
+    if (window === mainWindow && playerWindows?.isOpen()) {
+      playerWindows.handleMainFocus();
+    }
+  });
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -251,6 +264,15 @@ ipcMain.handle('get-app-icon-path', async (_event, variant) => {
 ipcMain.handle('update-library-watch', async (_event, folders) => {
   libraryWatcher.updateFolders(Array.isArray(folders) ? folders : []);
   return { ok: true };
+});
+
+ipcMain.handle('path-exists', async (_event, filePath) => {
+  if (!filePath || typeof filePath !== 'string') return false;
+  try {
+    return fs.existsSync(path.resolve(filePath));
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle('show-in-explorer', async (_event, filePath) => {

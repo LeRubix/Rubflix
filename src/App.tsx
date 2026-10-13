@@ -6,7 +6,7 @@ import {
 } from './utils/libraryLoader';
 import { scanAllFolders, diffLibrary, mergeLibrarySync, pruneRemovedPaths } from './utils/librarySync';
 import { runInitialScanOnce, resetScanSession } from './utils/scanSession';
-import { Play, Info, FolderSearch, Settings as SettingsIcon, Search, Volume2, VolumeX } from 'lucide-react';
+import { Play, Info, FolderSearch, Settings as SettingsIcon, Search, History, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SettingsModal } from './components/SettingsModal';
 import { ContentRow, DetailModal } from './components/NetflixUI';
@@ -33,6 +33,7 @@ import {
   buildHeroCatalog,
   buildGenreRows,
   resolvePlayTarget,
+  resolveShowDetailTarget,
 } from './utils/grouping';
 import {
   clearTmdbCaches,
@@ -57,6 +58,10 @@ import { resolveAppVersion } from './utils/appVersion';
 import { useUserLists } from './hooks/useUserLists';
 import { pruneLists, resolveListVideos } from './utils/userLists';
 import { ManageListsModal } from './components/ManageListsModal';
+import { WatchHistoryOverlay } from './components/WatchHistoryOverlay';
+import { cancelEnrich } from './utils/enrichCancel';
+import { releaseVideoForPath } from './utils/thumbnail';
+import { appendWatchHistory, episodeCodeFromFile } from './utils/watchHistory';
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
@@ -67,12 +72,15 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [librarySyncing, setLibrarySyncing] = useState(false);
   const [playingVideo, setPlayingVideo] = useState<LocalFile | null>(null);
+  const playingVideoRef = useRef<LocalFile | null>(null);
   const [infoVideo, setInfoVideo] = useState<LocalFile | null>(null);
+  const [infoInitialSubfolder, setInfoInitialSubfolder] = useState<string | undefined>(undefined);
   const [showStartup, setShowStartup] = useState(true);
   
   // Settings State
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'general' | 'library' | 'personalization' | 'profiles' | 'advanced'>('general');
   const [settings, setSettings] = useState(loadSettings);
 
@@ -395,6 +403,16 @@ export default function App() {
     });
   }, [settings.autoSyncLibrary, scanLibrary]);
 
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onLibraryPathsRemoved) return;
+    return api.onLibraryPathsRemoved((paths) => {
+      if (!paths?.length) return;
+      cancelEnrich(paths);
+      for (const p of paths) releaseVideoForPath(p);
+    });
+  }, []);
+
   const playInExternal = (video: LocalFile) => {
     if (settings.externalPlayerPath && window.electronAPI?.playInExternalPlayer) {
       window.electronAPI.playInExternalPlayer(settings.externalPlayerPath, video.path);
@@ -466,9 +484,29 @@ export default function App() {
 
     const session = buildSession(target);
     if (!session || !window.electronAPI?.playerStart) return;
+    playingVideoRef.current = target;
     setPlayingVideo(target);
     window.electronAPI.playerStart(session);
   };
+
+  const handleOpenInfo = useCallback(
+    (video: LocalFile) => {
+      const resolved = resolveShowDetailTarget(files, video);
+      if (resolved) {
+        setInfoVideo(resolved.show);
+        setInfoInitialSubfolder(resolved.seasonKey);
+      } else {
+        setInfoVideo(video);
+        setInfoInitialSubfolder(undefined);
+      }
+    },
+    [files],
+  );
+
+  const closeInfo = useCallback(() => {
+    setInfoVideo(null);
+    setInfoInitialSubfolder(undefined);
+  }, []);
 
   // Keep handlers fresh for the IPC listeners below without re-subscribing
   const playerHandlersRef = useRef({ handlePlayVideo, getNextEpisode, files });
@@ -479,12 +517,17 @@ export default function App() {
     if (!api?.onPlayerExited) return;
 
     const offExited = api.onPlayerExited((payload) => {
+      const watchedFile = playingVideoRef.current;
+      playingVideoRef.current = null;
       setPlayingVideo(null);
       if (activeProfile) {
         setProgresses(JSON.parse(localStorage.getItem(`netflix_progress_${activeProfile}`) || '{}'));
         if (payload?.duration && payload.duration > 0 && payload.position / payload.duration >= 0.9) {
           setManualWatched(activeProfile, payload.path, true);
           setWatchedTick((t) => t + 1);
+        }
+        if (payload && watchedFile && payload.path === watchedFile.path) {
+          void appendWatchHistory(activeProfile, watchedFile, payload, episodeCodeFromFile(watchedFile));
         }
       }
     });
@@ -679,19 +722,32 @@ export default function App() {
               <div className="flex items-center gap-8" style={{ WebkitAppRegion: 'no-drag' } as any}>
                 <h1 className="text-accent font-black text-2xl tracking-tighter pointer-events-auto shadow-black drop-shadow-md">{settings.appName}</h1>
                 <ul className="hidden md:flex gap-5 text-sm font-semibold text-gray-200 pointer-events-auto">
-                  <li onClick={() => { setShowSearch(false); setActiveTab('home'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'home' && !showSearch ? 'text-white' : 'hover:text-gray-300'}`}>Home</li>
-                  <li onClick={() => { setShowSearch(false); setActiveTab('tv'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'tv' && !showSearch ? 'text-white' : 'hover:text-gray-300'}`}>TV Shows</li>
-                  <li onClick={() => { setShowSearch(false); setActiveTab('movies'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'movies' && !showSearch ? 'text-white' : 'hover:text-gray-300'}`}>Movies</li>
+                  <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('home'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'home' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>Home</li>
+                  <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('tv'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'tv' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>TV Shows</li>
+                  <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('movies'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'movies' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>Movies</li>
                 </ul>
               </div>
             
             <div className="pointer-events-auto flex items-center gap-6 pr-40" style={{ WebkitAppRegion: 'no-drag' } as any}>
               <button
-                onClick={() => setShowSearch((s) => !s)}
+                onClick={() => {
+                  setShowHistory(false);
+                  setShowSearch((s) => !s);
+                }}
                 className={`flex items-center group relative p-1 hover:bg-white/10 rounded-full transition ${showSearch ? 'bg-white/10' : ''}`}
                 aria-label="Search library"
               >
                 <Search className="w-5 h-5 text-white" />
+              </button>
+              <button
+                onClick={() => {
+                  setShowSearch(false);
+                  setShowHistory((h) => !h);
+                }}
+                className={`flex items-center group relative p-1 hover:bg-white/10 rounded-full transition ${showHistory ? 'bg-white/10' : ''}`}
+                aria-label="Watch history"
+              >
+                <History className="w-5 h-5 text-white" />
               </button>
               {settings.compactLibraryButton ? (
                 <button
@@ -770,8 +826,8 @@ export default function App() {
         </div>
       ) : (
         <>
-          {/* Hero Banner with Ken Burns — hidden while search is open */}
-          {featured && !showSearch && (
+          {/* Hero Banner with Ken Burns, hidden while search is open */}
+          {featured && !showSearch && !showHistory && (
             <div className="relative w-full overflow-hidden" style={{ height: `${85 / settings.uiScale}vh` }}>
                   {/* Image and Video Wrapper */}
                   <div className="absolute inset-0 w-full h-full bg-gray-900">
@@ -837,7 +893,7 @@ export default function App() {
                           <Play className="w-7 h-7 fill-black" /> Play
                         </button>
                         <button 
-                          onClick={() => setInfoVideo(featured)}
+                          onClick={() => handleOpenInfo(featured)}
                           className="flex items-center gap-2 bg-gray-500/70 text-white px-8 py-3 rounded text-xl font-bold hover:bg-gray-500/50 transition"
                         >
                           <Info className="w-7 h-7" /> More Info
@@ -857,9 +913,9 @@ export default function App() {
             </div>
           )}
 
-          {/* Carousel Rows — hidden while search is open */}
-          <div className={`px-2 relative z-10 flex-grow pb-20 ${showSearch ? 'hidden' : featured ? '-mt-32' : ''}`}>
-            {(activeTab === 'movies' || activeTab === 'tv') && !showSearch && (
+          {/* Carousel Rows, hidden while search is open */}
+          <div className={`px-2 relative z-10 flex-grow pb-20 ${showSearch || showHistory ? 'hidden' : featured ? '-mt-32' : ''}`}>
+            {(activeTab === 'movies' || activeTab === 'tv') && !showSearch && !showHistory && (
               <div className="flex justify-end px-8 mb-2">
                 <button
                   type="button"
@@ -874,16 +930,16 @@ export default function App() {
               </div>
             )}
             {activeTab === 'home' && top10.length > 0 && (
-              <ContentRow title="Top 10 in Your House Today" videos={top10} onPlay={handlePlayVideo} onInfo={setInfoVideo} isTop10={true} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Top 10 in Your House Today" videos={top10} onPlay={handlePlayVideo} onInfo={handleOpenInfo} isTop10={true} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             {activeTab === 'home' && continueWatchingAll.length > 0 && (
-              <ContentRow title="Continue Watching" videos={continueWatchingAll} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Continue Watching" videos={continueWatchingAll} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             {activeTab === 'tv' && continueWatchingTv.length > 0 && (
-              <ContentRow title="Continue Watching" videos={continueWatchingTv} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Continue Watching" videos={continueWatchingTv} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             {(activeTab === 'home' || activeTab === 'movies') && continueWatchingMovies.length > 0 && (
-              <ContentRow title="Continue Watching" videos={continueWatchingMovies} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Continue Watching" videos={continueWatchingMovies} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             {activeTab === 'movies' && movieListRows.map(({ list, videos }) => (
               <ContentRow
@@ -891,7 +947,7 @@ export default function App() {
                 title={list.name}
                 videos={videos}
                 onPlay={handlePlayVideo}
-                onInfo={setInfoVideo}
+                onInfo={handleOpenInfo}
                 progresses={progresses}
                 expandable
                 mediaType="movie"
@@ -907,7 +963,7 @@ export default function App() {
                 title={list.name}
                 videos={videos}
                 onPlay={handlePlayVideo}
-                onInfo={setInfoVideo}
+                onInfo={handleOpenInfo}
                 progresses={progresses}
                 expandable
                 mediaType="tv"
@@ -919,15 +975,15 @@ export default function App() {
             ))}
             
             {activeTab === 'home' && heroCatalog.length > 0 && (
-              <ContentRow title="Home" videos={heroCatalog} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Home" videos={heroCatalog} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             
             {(activeTab === 'home' || activeTab === 'tv') && folders.length > 0 && (
-              <ContentRow title="Series" videos={folders} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Series" videos={folders} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             
             {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
-              <ContentRow title="Movies" videos={movies} onPlay={handlePlayVideo} onInfo={setInfoVideo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+              <ContentRow title="Movies" videos={movies} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
 
             {activeTab === 'movies' && movieGenreRows.map((row) => (
@@ -936,7 +992,7 @@ export default function App() {
                 title={row.title}
                 videos={row.videos}
                 onPlay={handlePlayVideo}
-                onInfo={setInfoVideo}
+                onInfo={handleOpenInfo}
                 progresses={progresses}
                 expandable
                 activeProfileId={activeProfile}
@@ -950,7 +1006,7 @@ export default function App() {
                 title={row.title}
                 videos={row.videos}
                 onPlay={handlePlayVideo}
-                onInfo={setInfoVideo}
+                onInfo={handleOpenInfo}
                 progresses={progresses}
                 expandable
                 activeProfileId={activeProfile}
@@ -975,8 +1031,9 @@ export default function App() {
           key={infoVideo.path}
           video={infoVideo}
           watchedRevision={watchedTick}
-          onClose={() => setInfoVideo(null)}
-          onPlay={(v) => { setInfoVideo(null); handlePlayVideo(v); }}
+          initialSubfolder={infoInitialSubfolder}
+          onClose={closeInfo}
+          onPlay={(v) => { closeInfo(); handlePlayVideo(v); }}
           onUpdate={handleUpdateVideo}
           onReset={handleResetVideo}
           onEpisodeEnriched={handleEpisodeEnriched}
@@ -1008,10 +1065,21 @@ export default function App() {
           files={searchCatalog}
           onClose={() => setShowSearch(false)}
           onPlay={handlePlayVideo}
-          onInfo={setInfoVideo}
+          onInfo={handleOpenInfo}
           progresses={progresses}
           activeProfileId={activeProfile}
           watchedIndicatorMode={settings.watchedIndicatorMode}
+        />
+      )}
+
+      {showHistory && activeProfile && (
+        <WatchHistoryOverlay
+          profileId={activeProfile}
+          files={files}
+          progresses={progresses}
+          onClose={() => setShowHistory(false)}
+          onPlay={handlePlayVideo}
+          onInfo={handleOpenInfo}
         />
       )}
 

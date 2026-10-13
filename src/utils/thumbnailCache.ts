@@ -1,5 +1,7 @@
 const DB_NAME = 'kudflix_media_cache_v1';
+const DB_VERSION = 2;
 const STORE = 'media';
+const HISTORY_THUMB_STORE = 'watchHistoryThumbs';
 
 export interface CachedMediaEntry {
   path: string;
@@ -13,11 +15,14 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: 'path' });
+      }
+      if (!db.objectStoreNames.contains(HISTORY_THUMB_STORE)) {
+        db.createObjectStore(HISTORY_THUMB_STORE, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -109,6 +114,50 @@ export async function deleteCachedMedia(paths: string[]): Promise<void> {
       const tx = db.transaction(STORE, 'readwrite');
       const store = tx.objectStore(STORE);
       for (const path of paths) store.delete(path);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // ignore
+  }
+}
+
+export async function setWatchHistoryThumb(id: string, thumbnail: string | null): Promise<void> {
+  if (!thumbnail) return;
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(HISTORY_THUMB_STORE, 'readwrite');
+      tx.objectStore(HISTORY_THUMB_STORE).put({ id, thumbnail });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // ignore
+  }
+}
+
+export async function getWatchHistoryThumb(id: string): Promise<string | null> {
+  try {
+    const db = await openDb();
+    const row = await new Promise<{ id: string; thumbnail: string | null } | undefined>((resolve, reject) => {
+      const tx = db.transaction(HISTORY_THUMB_STORE, 'readonly');
+      const req = tx.objectStore(HISTORY_THUMB_STORE).get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return row?.thumbnail ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteWatchHistoryThumb(id: string): Promise<void> {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(HISTORY_THUMB_STORE, 'readwrite');
+      tx.objectStore(HISTORY_THUMB_STORE).delete(id);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });

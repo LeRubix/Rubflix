@@ -322,7 +322,7 @@ export function UserListsMenu({
   );
 }
 
-/** Plus button on hover jawlet — only renders when profile is active. */
+/** Plus button on hover jawlet, only renders when profile is active. */
 export function VideoCardListButton({
   video,
   activeProfileId,
