@@ -77,18 +77,26 @@ function find7z() {
 
 function extract7z(archive, dest) {
   const sevenZip = find7z();
-  if (!sevenZip) {
-    console.error('\n7-Zip is required to extract mpv. Install from https://www.7-zip.org/');
-    console.error('Alternatively, manually extract mpv.exe and ffprobe.exe to electron/bin/mpv/\n');
-    return false;
+  if (sevenZip) {
+    try {
+      execFileSync(sevenZip, ['x', archive, `-o${dest}`, '-y'], { stdio: 'inherit' });
+      return true;
+    } catch {
+      console.error('\n7-Zip extraction failed, attempting fallback...');
+    }
   }
+
+  // Fallback to Windows 10/11 built-in tar.exe which supports .7z via libarchive
   try {
-    execFileSync(sevenZip, ['x', archive, `-o${dest}`, '-y'], { stdio: 'inherit' });
+    execFileSync('tar.exe', ['-xf', archive, '-C', dest], { stdio: 'inherit' });
     return true;
-  } catch {
-    console.error('\n7-Zip extraction failed.');
-    return false;
+  } catch (err) {
+    console.error('\nBuilt-in tar extraction failed:', err.message);
   }
+
+  console.error('\n7-Zip is required to extract mpv. Install from https://www.7-zip.org/');
+  console.error('Alternatively, manually extract mpv.exe and ffprobe.exe to electron/bin/mpv/\n');
+  return false;
 }
 
 function findFile(dir, name) {

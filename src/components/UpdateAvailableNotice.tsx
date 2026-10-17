@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
-const FALLBACK_RELEASE_URL = 'https://github.com/LeRubix/Rubflix/releases/latest';
+const FALLBACK_RELEASE_URL = 'https://github.com/NekoIsUnavailable/Kudflix/releases/latest';
 
 export function UpdateAvailableNotice({
   latestVersion,

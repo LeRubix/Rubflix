@@ -31,7 +31,7 @@ export function truncateAppName(name: string): string {
   return name.slice(0, MAX_APP_NAME_LENGTH);
 }
 
-export const DEFAULT_APP_NAME = 'Rubflix';
+export const DEFAULT_APP_NAME = 'Kudflix';
 
 const DEFAULT_SETTINGS: Settings = {
   accentColor: '#E50914',

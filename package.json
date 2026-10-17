@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.kudflix.app",
-    "productName": "Rubflix",
+    "productName": "Kudflix",
     "directories": {
       "output": "../release_kudflix"
     },
@@ -30,7 +30,7 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Rubflix"
+      "shortcutName": "Kudflix"
     },
     "files": [
       "dist/**/*",

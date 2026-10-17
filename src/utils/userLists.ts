@@ -10,11 +10,21 @@ export interface UserList {
   order: number;
 }
 
-const STORAGE_PREFIX = 'rubflix_user_lists_';
+const STORAGE_PREFIX = 'kudflix_user_lists_';
+const LEGACY_STORAGE_PREFIX = 'rubflix_user_lists_';
 const MAX_NAME_LEN = 40;
 
 function storageKey(profileId: string): string {
-  return `${STORAGE_PREFIX}${profileId}`;
+  const primary = `${STORAGE_PREFIX}${profileId}`;
+  const legacy = `${LEGACY_STORAGE_PREFIX}${profileId}`;
+  if (!localStorage.getItem(primary) && localStorage.getItem(legacy)) {
+    try {
+      localStorage.setItem(primary, localStorage.getItem(legacy)!);
+    } catch {
+      // ignore
+    }
+  }
+  return primary;
 }
 
 function readLists(profileId: string): UserList[] {
@@ -41,6 +51,7 @@ function readLists(profileId: string): UserList[] {
 function writeLists(profileId: string, lists: UserList[]): void {
   localStorage.setItem(storageKey(profileId), JSON.stringify(lists));
   invalidateListsSnapshot(profileId);
+  window.dispatchEvent(new CustomEvent('kudflix-lists-changed', { detail: { profileId } }));
   window.dispatchEvent(new CustomEvent('rubflix-lists-changed', { detail: { profileId } }));
 }
 
@@ -199,9 +210,11 @@ export function subscribeUserLists(profileId: string | null, onChange: () => voi
     if (profileId && detail?.profileId === profileId) onChange();
   };
   window.addEventListener('storage', onStorage);
+  window.addEventListener('kudflix-lists-changed', onCustom);
   window.addEventListener('rubflix-lists-changed', onCustom);
   return () => {
     window.removeEventListener('storage', onStorage);
+    window.removeEventListener('kudflix-lists-changed', onCustom);
     window.removeEventListener('rubflix-lists-changed', onCustom);
   };
 }

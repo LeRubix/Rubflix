@@ -793,15 +793,27 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
               </p>
 
               <div className="pt-4 border-t border-gray-800 space-y-1">
-                <p className="text-[11px] text-gray-600">
-                  Playback via{' '}
-                  <a href="https://mpv.io" className="text-gray-500 hover:text-gray-300 underline" target="_blank" rel="noreferrer">mpv</a>
-                  {' '}(LGPL-2.1)
+                <p className="text-[11px] text-gray-500">
+                  <span className="font-semibold text-gray-400">Kudflix</span> — Playback powered by{' '}
+                  <a href="https://mpv.io" className="text-gray-400 hover:text-gray-200 underline" target="_blank" rel="noreferrer">
+                    mpv
+                  </a>{' '}
+                  (LGPL-2.1)
                 </p>
-                <p className="text-[11px] text-gray-600">
-                  Forked from{' '}
-                  <a href={FORK_REPO_URL} className="text-gray-500 hover:text-gray-300 underline" target="_blank" rel="noreferrer">
-                    Kudflix
+                <p className="text-[11px] text-gray-500">
+                  Audio codec engine & player enhancements contributed by{' '}
+                  <a href="https://github.com/LeRubix" className="text-red-500 hover:underline font-semibold" target="_blank" rel="noreferrer">
+                    LeRubix
+                  </a>{' '}
+                  (via{' '}
+                  <a href={REPO_URL} className="text-gray-400 hover:text-gray-200 underline" target="_blank" rel="noreferrer">
+                    Rubflix
+                  </a>)
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  Main repository:{' '}
+                  <a href={FORK_REPO_URL} className="text-gray-400 hover:text-gray-200 underline" target="_blank" rel="noreferrer">
+                    github.com/NekoIsUnavailable/Kudflix
                   </a>
                 </p>
               </div>

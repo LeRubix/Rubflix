@@ -5,7 +5,7 @@ const { BrowserWindow } = require('electron');
 const TITLE_STRIP_HEIGHT = 32;
 
 function playerWindowTitle(appName) {
-  const name = (appName || '').trim() || 'Rubflix';
+  const name = (appName || '').trim() || 'Kudflix';
   return `${name} Player`;
 }
 

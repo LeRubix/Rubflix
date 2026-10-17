@@ -33,7 +33,7 @@ export function StartupScreen({ onComplete, appName, accentColor }: { onComplete
           textShadow: `0 0 40px ${accentColor}80, 0 0 100px ${accentColor}40`,
         }}
       >
-        {appName || 'RUBFLIX'}
+        {appName || 'KUDFLIX'}
       </div>
     </div>
   );

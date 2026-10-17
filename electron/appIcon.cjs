@@ -10,7 +10,7 @@ const WINDOW_ICON_SIZE = 256;
 // Sizes embedded into the generated .ico used for desktop/start-menu shortcuts.
 const ICO_SIZES = [16, 32, 48, 64, 128, 256];
 
-const SHORTCUT_NAME = 'Rubflix';
+const SHORTCUT_NAME = 'Kudflix';
 
 function iconFileName(_variant) {
   return 'icon.png';

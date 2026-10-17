@@ -1,7 +1,7 @@
 const CACHE_KEY = 'kudflix_update_check_v1';
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const GITHUB_LATEST =
-  'https://api.github.com/repos/LeRubix/Rubflix/releases/latest';
+  'https://api.github.com/repos/NekoIsUnavailable/Kudflix/releases/latest';
 
 export type AppUpdateInfo =
   | { status: 'update'; latestVersion: string; releaseUrl: string | null }
