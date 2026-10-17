@@ -1,0 +1,26 @@
+PackageIdentifier: NekoIsUnavailable.Kudflix
+PackageVersion: 1.4.5
+PackageLocale: en-US
+Publisher: NekoIsUnavailable
+PublisherUrl: https://github.com/NekoIsUnavailable
+PublisherSupportUrl: https://github.com/NekoIsUnavailable/Kudflix/issues
+PackageName: Kudflix
+PackageUrl: https://github.com/NekoIsUnavailable/Kudflix
+License: Open Source / LGPL-2.1
+ShortDescription: A Netflix-style desktop app for your local video library with universal MPV playback.
+Description: |
+  Kudflix is an offline desktop media player for your local video collection with a sleek Netflix-style user interface.
+  Built with Electron, React, and an embedded MPV engine for native support of all audio formats (AC-3, E-AC-3, DTS, TrueHD),
+  styled anime subtitles, TMDB metadata auto-scraping, and Discord Rich Presence.
+Moniker: kudflix
+Tags:
+- media-player
+- video-player
+- netflix
+- mpv
+- offline
+- desktop
+- local-media
+ReleaseNotesUrl: https://github.com/NekoIsUnavailable/Kudflix/releases/tag/v1.4.5
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

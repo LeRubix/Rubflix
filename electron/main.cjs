@@ -6,6 +6,7 @@ const { probeMediaAudio, probeMediaDuration, probeTracks, findSubtitleFiles } = 
 const { PlayerWindows, TITLE_STRIP_HEIGHT } = require('./playerWindows.cjs');
 const { LibraryWatcher } = require('./libraryWatcher.cjs');
 const appIcon = require('./appIcon.cjs');
+const { discordRpc } = require('./discordRpc.cjs');
 
 const isDev = !app.isPackaged;
 
@@ -45,6 +46,9 @@ const libraryWatcher = new LibraryWatcher(
 
 mpvController.onStateChange = (state) => {
   playerWindows?.sendToControls('player-state', state);
+  if (playerSession) {
+    discordRpc.updatePlayback(playerSession, state);
+  }
 };
 
 // Allow unmuted autoplay
@@ -68,6 +72,7 @@ async function exitPlayer(payload) {
   if (exiting) return;
   exiting = true;
   try {
+    discordRpc.clear();
     await mpvController.close();
     playerWindows?.close();
     playerSession = null;
@@ -140,6 +145,7 @@ app.whenReady().then(() => {
     }
   });
 
+  discordRpc.init();
   createWindow();
 
   app.on('browser-window-focus', (_event, window) => {
@@ -453,6 +459,7 @@ ipcMain.handle('select-subtitle-file', async (event) => {
 ipcMain.handle('player-start', async (event, session) => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
   playerSession = session;
+  discordRpc.updatePlayback(session, mpvController.getState());
   const windows = getPlayerWindows();
   if (windows.isOpen()) {
     windows.sendToControls('player-session', session);
@@ -503,5 +510,15 @@ ipcMain.handle('player-request-next', async () => {
 
 ipcMain.handle('player-exit', async (event, payload) => {
   await exitPlayer(payload);
+  return { ok: true };
+});
+
+ipcMain.handle('discord-rpc-set-enabled', (event, enabled) => {
+  discordRpc.setEnabled(enabled);
+  return { ok: true };
+});
+
+ipcMain.handle('discord-rpc-set-client-id', (event, clientId) => {
+  discordRpc.setClientId(clientId);
   return { ok: true };
 });

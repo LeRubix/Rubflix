@@ -34,6 +34,7 @@ export interface Settings {
   watchedIndicatorMode: 'always' | 'hover' | 'never';
   /** Edit + Lists controls on the title detail hero. */
   detailModalActionsMode: 'icons' | 'menu';
+  discordRpcEnabled?: boolean;
 }
 
 const RECENT_COLORS = ['#E50914', '#003e8f', '#bc13fe', '#555555', '#7b4cff'];
@@ -65,6 +66,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     customTmdbApiKey: currentSettings.customTmdbApiKey ?? '',
     watchedIndicatorMode: currentSettings.watchedIndicatorMode ?? 'always',
     detailModalActionsMode: currentSettings.detailModalActionsMode ?? 'menu',
+    discordRpcEnabled: currentSettings.discordRpcEnabled ?? true,
   });
   const [activeTab, setActiveTab] = useState<'general' | 'library' | 'personalization' | 'profiles' | 'advanced'>(initialTab);
   const [isDefaultTmdbKeyMode, setIsDefaultTmdbKeyMode] = useState(
@@ -298,6 +300,26 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                   className={`relative w-12 h-6 rounded-full transition ${settings.compactLibraryButton ? 'bg-accent' : 'bg-gray-600'}`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${settings.compactLibraryButton ? 'translate-x-6' : ''}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between bg-black/50 border border-gray-700 rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-300">Discord Rich Presence</p>
+                  <p className="text-xs text-gray-500 mt-1">Broadcast current video title and progress to your Discord profile.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.discordRpcEnabled ?? true}
+                  onClick={() => {
+                    const next = !(settings.discordRpcEnabled ?? true);
+                    setSettings({ ...settings, discordRpcEnabled: next });
+                    window.electronAPI?.setDiscordRpcEnabled?.(next);
+                  }}
+                  className={`relative w-12 h-6 rounded-full transition ${(settings.discordRpcEnabled ?? true) ? 'bg-accent' : 'bg-gray-600'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(settings.discordRpcEnabled ?? true) ? 'translate-x-6' : ''}`} />
                 </button>
               </div>
 

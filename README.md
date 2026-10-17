@@ -1,58 +1,121 @@
 # Kudflix
 
-A Netflix-style desktop app for your local video library. Built with Electron, React, Vite, Tailwind CSS, and [mpv](https://github.com/mpv-player/mpv) for universal audio/video playback.
+<p align="center">
+  <img src="screenshots/home.png" alt="Kudflix Home Interface" width="90%" style="border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
+</p>
 
-> **Credits & Acknowledgements:**  
-> Player engine overhaul, audio codec support (AC-3, E-AC-3, DTS), multi-folder libraries, watch history, and UI enhancements contributed by [LeRubix](https://github.com/LeRubix) from their fork [Rubflix](https://github.com/LeRubix/Rubflix).
+<p align="center">
+  <strong>Turn your local video folder into a gorgeous, offline Netflix experience in seconds.</strong><br>
+  <em>Zero servers. Zero accounts. Zero telemetry. Powered by <a href="https://mpv.io">MPV</a>.</em>
+</p>
 
-## UI showcase
+<p align="center">
+  <a href="https://github.com/NekoIsUnavailable/Kudflix/releases/latest"><img src="https://img.shields.io/github/v/release/NekoIsUnavailable/Kudflix?style=for-the-badge&color=E50914" alt="Latest Release"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Platform">
+  <a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.5/Kudflix.Setup.1.4.5.exe"><img src="https://img.shields.io/badge/Download-Installer%20(.exe)-success?style=for-the-badge" alt="Download Installer"></a>
+  <a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.5/Kudflix-1.4.5-win.zip"><img src="https://img.shields.io/badge/Download-Portable%20(.zip)-informational?style=for-the-badge" alt="Download Portable"></a>
+</p>
 
-Screenshots in [`screenshots/`](screenshots/): profiles, home, detail modal, startup, and avatar picker.
+---
 
-## Features
+## ⚡ Why Kudflix?
 
-- **Universal Playback**: Internal [mpv](https://github.com/mpv-player/mpv) player in a dedicated **Player** window. Plays AC-3, E-AC-3, DTS, 10-bit anime, styled ASS subtitles, and works smoothly with Discord/OBS window capture. Optional external player (VLC/PotPlayer). Resume position per profile.
-- **Library layout**: Home, Series, and Movies rows; hero banner; Top 10 and Continue Watching; genre rows from TMDB/local metadata.
-- **TV folders**: Episodes grouped by series folder and season; detail modal with season tabs, TMDB episode titles/stills, hide-watched, and resume.
-- **Movies & files**: Smart filename parsing (releases, years, sequels); optional sidecar/NFO metadata; manual edit, TMDB ID override, and reset-to-default per title.
-- **TMDB**: Posters, synopses, cast, and episode data (with caching and rate-limit-friendly fetching). Optional custom API key in Advanced settings.
-- **Profiles**: Who’s watching, default profile, custom accent/wallpaper, avatar grid or upload with in-app square crop.
-- **Watched state**: Manual and progress-based; filters on rows and in search; mark show/season watched from the edit panel.
-- **Search & filters**: Full-library search with genre, year, watched, and sort options.
-- **Personalization**: Custom app name (default **Kudflix**), accent color (default `#E50914`), UI scale, wallpaper, watched-eye display mode.
-- **Library sync**: Multiple movie/TV root folders, background enrich (thumbnails/duration), optional folder watch for changes.
+Most media center apps like Plex or Jellyfin require setting up background server daemons, port forwarding, or creating accounts just to browse your local video collection. VLC plays everything, but lacks a modern streaming UI.
 
-## Supported formats
+**Kudflix gives you the best of both worlds:**
+* **Point & Play:** Select any folder on your PC or external drive—Kudflix automatically scrapes posters, cast, synopsis, and episode lists from TMDB.
+* **Universal MPV Engine:** Plays every video and audio format out-of-the-box (AC-3/Dolby Digital, E-AC-3, DTS, TrueHD, 10-bit HEVC, and styled anime `.ass` subtitles) without stuttering or transcoding.
+* **100% Offline & Private:** No internet required for playback. Ideal for travel, flights, laptops, and offline setups.
+* **Discord Rich Presence:** Automatically shows what movie or episode you're watching on your Discord profile with live progress timers.
+* **Portable USB Mode:** Download the `.zip` release, extract it to a USB drive or external hard drive, and take your Netflix experience anywhere without installing anything.
 
-Anything mpv can decode (MKV, MP4, AVI, WebM, etc., with AC-3, E-AC-3, DTS, TrueHD, FLAC, Opus). Bundled mpv is included in release builds via `npm run setup-mpv`.
+| Feature | Kudflix | VLC | Plex / Jellyfin |
+| :--- | :---: | :---: | :---: |
+| **Netflix-style UI & Posters** | ✅ Yes | ❌ No | ✅ Yes |
+| **Zero Server / Zero Setup** | ✅ Yes | ✅ Yes | ❌ Requires Server |
+| **100% Offline (No Account)** | ✅ Yes | ✅ Yes | ⚠️ Complex / Partial |
+| **Plays AC-3 / DTS / Anime Subs** | ✅ Native (MPV) | ✅ Yes | ⚠️ Often Transcodes |
+| **Discord Rich Presence** | ✅ Built-in | ❌ Via plugin | ❌ Via plugin |
+| **Portable USB Mode** | ✅ Yes (.zip) | ✅ Yes | ❌ No |
 
-## Quick start
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="screenshots/modal.png" alt="Season & Episode Selector" width="48%" />
+  <img src="screenshots/profiles.png" alt="Multi-Profile Screen" width="48%" />
+</p>
+
+---
+
+## 🚀 Installation & Downloads
+
+### Option 1: Direct Download
+Download the latest version from the [**Releases Page**](https://github.com/NekoIsUnavailable/Kudflix/releases/latest):
+* [**Download Kudflix Setup 1.4.5.exe**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.5/Kudflix.Setup.1.4.5.exe) — Standard one-click installer with desktop & start menu shortcuts.
+* [**Download Kudflix-1.4.5-win.zip**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.5/Kudflix-1.4.5-win.zip) — Portable edition: unzip anywhere and run `Kudflix.exe` directly from an external drive or USB.
+
+### Option 2: Windows Package Manager (`winget`)
+*(Manifest submitted; available shortly)*
+```cmd
+winget install NekoIsUnavailable.Kudflix
+```
+
+---
+
+## ✨ Features Breakdown
+
+- **Smart Series & TV Folder Grouping**: Folders containing episodes (e.g. `Show Name/Season 1/ep01.mp4`) are automatically bundled into a single Series card with season tabs, episode runtimes, and thumbnails.
+- **Top 10 & Continue Watching**: Intelligent rows that remember your playback positions and surface your most-watched titles per profile.
+- **Multi-Profile Support**: "Who's Watching?" profile picker with custom names, avatar creator/cropper, and personal watch histories.
+- **Custom Playlists & Watch History**: Create custom collections, track your watched status, and filter your library on the fly.
+- **Discord Rich Presence**: Share what you're watching with your friends (toggleable in Settings).
+- **OBS / Discord Screen Share Friendly**: The dedicated player overlay captures cleanly in Discord and OBS window-capture modes.
+
+---
+
+## 🛠️ Development
 
 ### Prerequisites
-
 - Node.js 18+
 - npm
 
-### Development
-
 ```bash
+# Clone the repository
+git clone https://github.com/NekoIsUnavailable/Kudflix.git
+cd Kudflix
+
+# Install dependencies and download MPV binaries
 npm install
 npm run setup-mpv
+
+# Launch in development mode
 npm start
-```
 
-### Production build (Windows)
-
-```bash
-npm run setup-mpv   # once, or after cleaning electron/bin/mpv
+# Compile production installer & portable zip
 npm run package
 ```
 
-Installer output: `../release_kudflix/` (NSIS, product name **Kudflix**).
+---
 
-## License & Credits
+## 🗺️ Roadmap & Contributing
 
-- Open source - Free to use and modify for your own local setup.
-- Kudflix by [NekoIsUnavailable](https://github.com/NekoIsUnavailable/Kudflix).
-- Core playback overhaul and feature contributions by [LeRubix](https://github.com/LeRubix) ([Rubflix](https://github.com/LeRubix/Rubflix)).
-- mpv is licensed under [LGPL-2.1](https://github.com/mpv-player/mpv).
+We welcome community pull requests and feature suggestions!
+- [x] Universal MPV audio codec support (AC-3, E-AC-3, DTS)
+- [x] Discord Rich Presence integration
+- [x] Portable `.zip` distribution
+- [ ] Steam Deck / Linux AppImage build
+- [ ] macOS build
+- [ ] Keyframe thumbnail preview on progress scrub
+- [ ] Watch Together / Synced local party mode
+
+Feel free to open an [Issue](https://github.com/NekoIsUnavailable/Kudflix/issues) or submit a Pull Request!
+
+---
+
+## 📜 Credits & License
+
+* Kudflix is open source and free to use for your personal offline library.
+* Core playback overhaul, universal codec engine, and player contributions by [**LeRubix**](https://github.com/LeRubix) ([Rubflix](https://github.com/LeRubix/Rubflix)).
+* Playback engine powered by [**mpv**](https://github.com/mpv-player/mpv) under [LGPL-2.1](https://github.com/mpv-player/mpv).

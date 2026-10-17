@@ -108,6 +108,8 @@ declare global {
       probeTracks: (videoPath: string) => Promise<{ audio: ProbeTrack[]; subtitles: ProbeTrack[] }>;
       findSubtitleFiles: (videoPath: string) => Promise<ExternalSubtitleFile[]>;
       selectSubtitleFile: () => Promise<string | null>;
+      setDiscordRpcEnabled: (enabled: boolean) => Promise<{ ok: boolean }>;
+      setDiscordRpcClientId: (clientId: string) => Promise<{ ok: boolean }>;
 
       playerStart: (session: PlayerSession) => Promise<{ ok: boolean }>;
       onPlayerExited: (callback: (payload: PlayerExitPayload | null) => void) => () => void;

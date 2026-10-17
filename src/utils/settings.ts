@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS: Settings = {
   customTmdbApiKey: '',
   watchedIndicatorMode: 'always' as const,
   detailModalActionsMode: 'menu' as const,
+  discordRpcEnabled: true,
 };
 
 export function loadSettings(): Settings {
@@ -87,6 +88,7 @@ export function loadSettings(): Settings {
             ? parsed.watchedIndicatorMode
             : 'always',
         detailModalActionsMode: parsed.detailModalActionsMode === 'icons' ? 'icons' : 'menu',
+        discordRpcEnabled: parsed.discordRpcEnabled ?? true,
       };
     }
 

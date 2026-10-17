@@ -228,6 +228,7 @@ export default function App() {
 
     saveSettings(settings);
     window.electronAPI?.setAppIcon?.('default');
+    window.electronAPI?.setDiscordRpcEnabled?.(settings.discordRpcEnabled ?? true);
   }, [settings]);
 
   useEffect(() => {
