@@ -1,5 +1,5 @@
 PackageIdentifier: NekoIsUnavailable.Kudflix
-PackageVersion: 1.4.5
+PackageVersion: 1.4.6
 Platform:
 - Windows.Desktop
 MinimumOSVersion: 10.0.0.0
@@ -12,7 +12,7 @@ InstallModes:
 UpgradeBehavior: install
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.5/Kudflix.Setup.1.4.5.exe
-  InstallerSha256: 8AA0B54E1E50FD80AA1802B4A0BB3A79411FFB93B4BD89D3E860F9AA52543F4A
+  InstallerUrl: https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.6/Kudflix.Setup.1.4.6.exe
+  InstallerSha256: 720B5AFF27060452B4BA5DAB7F020298A941A001DF0B96FB48AC83C825723C32
 ManifestType: installer
 ManifestVersion: 1.6.0

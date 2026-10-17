@@ -68,31 +68,40 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     subsInitialized.current = false;
     audioReconciledPath.current = null;
     requestedNext.current = false;
+    setOpenError(null);
 
     (async () => {
-      const external = await api.findSubtitleFiles(session.path).catch(() => []);
-      if (cancelled) return;
-      externalSubsRef.current = external;
+      try {
+        const external = typeof api?.findSubtitleFiles === 'function'
+          ? await api.findSubtitleFiles(session.path).catch(() => [])
+          : [];
+        if (cancelled) return;
+        externalSubsRef.current = external;
 
-      const subPref = getSubtitlePref(session.profileId, session.path);
-      const { volume: vol, muted: mute } = loadPlayerVolume();
+        const subPref = getSubtitlePref(session.profileId, session.path);
+        const { volume: vol, muted: mute } = loadPlayerVolume();
 
-      const style = loadSubtitleStyle();
-      const options: PlayerOpenOptions = {
-        volume: vol,
-        mute,
-        startTime: session.startTime > 5 ? session.startTime : 0,
-        subtitleStyle: subtitleStyleToMpv(style),
-      };
-      if (subPref?.type === 'off' || subPref?.type === 'external' || (!subPref && external.length > 0)) {
-        options.subtitleId = 'no';
-      } else if (subPref?.type === 'embedded') {
-        options.subtitleId = subPref.id;
+        const style = loadSubtitleStyle();
+        const options: PlayerOpenOptions = {
+          volume: vol,
+          mute,
+          startTime: session.startTime > 5 ? session.startTime : 0,
+          subtitleStyle: subtitleStyleToMpv(style),
+        };
+        if (subPref?.type === 'off' || subPref?.type === 'external' || (!subPref && external.length > 0)) {
+          options.subtitleId = 'no';
+        } else if (subPref?.type === 'embedded') {
+          options.subtitleId = subPref.id;
+        }
+
+        const result = await api.playerOpen(session.path, options);
+        if (cancelled) return;
+        if (!result.ok) setOpenError(result.error || 'Could not start playback.');
+      } catch (err: any) {
+        if (cancelled) return;
+        console.error('[VideoPlayer] failed to open:', err);
+        setOpenError(err?.message || 'Could not start playback.');
       }
-
-      const result = await api.playerOpen(session.path, options);
-      if (cancelled) return;
-      if (!result.ok) setOpenError(result.error || 'Could not start playback.');
     })();
 
     return () => {
@@ -123,8 +132,12 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     else if (!pref && files.length > 0) selectFile = files[0];
 
     (async () => {
-      for (const file of files) {
-        await cmd('add-subtitle', { path: file, select: samePath(file, selectFile) });
+      try {
+        for (const file of files) {
+          await cmd('add-subtitle', { path: file, select: samePath(file, selectFile) });
+        }
+      } catch (err) {
+        console.warn('[VideoPlayer] add-subtitle error:', err);
       }
     })();
   }, [state.loaded, session.profileId, session.path, cmd]);
@@ -142,12 +155,16 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     const correctingPref = pref != null && !prefTrack;
 
     (async () => {
-      const result = await api.playerCommand('audio-track', targetId);
-      if (!result.ok) {
-        console.warn('[audio-track]', result.error);
-        return;
+      try {
+        const result = await api.playerCommand('audio-track', targetId);
+        if (!result.ok) {
+          console.warn('[audio-track]', result.error);
+          return;
+        }
+        if (correctingPref) saveAudioPref(session.profileId, session.path, targetId);
+      } catch (err) {
+        console.warn('[VideoPlayer] audio-track error:', err);
       }
-      if (correctingPref) saveAudioPref(session.profileId, session.path, targetId);
     })();
   }, [state.loaded, state.tracks, session.path, session.profileId, api]);
 

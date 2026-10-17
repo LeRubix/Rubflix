@@ -1050,10 +1050,23 @@ export default function App() {
       {playingVideo && (
         <div className="fixed inset-0 z-[1000] bg-black">
           <div
-            className="h-8 flex items-center px-4 text-xs text-white/50 truncate pr-40"
+            className="h-8 flex items-center justify-between px-4 text-xs text-white/50 truncate pr-40"
             style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           >
-            {settings.appName} · {playingVideo.meta?.title || playingVideo.name}
+            <span className="truncate">{settings.appName} · {playingVideo.meta?.title || playingVideo.name}</span>
+            <button
+              onClick={() => {
+                window.electronAPI?.playerExit?.({
+                  path: playingVideo.path,
+                  position: 0,
+                  duration: 0,
+                });
+              }}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className="ml-4 shrink-0 text-white/70 hover:text-white px-2 py-0.5 rounded hover:bg-white/10 text-xs transition cursor-pointer"
+            >
+              ← Back to Browse
+            </button>
           </div>
         </div>
       )}

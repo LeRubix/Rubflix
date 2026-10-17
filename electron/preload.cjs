@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   probeMedia: (videoPath) => ipcRenderer.invoke('probe-media', videoPath),
   probeMediaDuration: (videoPath) => ipcRenderer.invoke('probe-media-duration', videoPath),
   probeTracks: (videoPath) => ipcRenderer.invoke('probe-tracks', videoPath),
+  findSubtitleFiles: (videoPath) => ipcRenderer.invoke('find-subtitle-files', videoPath),
   selectSubtitleFile: () => ipcRenderer.invoke('select-subtitle-file'),
   setDiscordRpcEnabled: (enabled) => ipcRenderer.invoke('discord-rpc-set-enabled', enabled),
   setDiscordRpcClientId: (id) => ipcRenderer.invoke('discord-rpc-set-client-id', id),

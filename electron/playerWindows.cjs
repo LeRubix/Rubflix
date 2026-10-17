@@ -69,19 +69,8 @@ class PlayerWindows {
     };
   }
 
-  syncAlwaysOnTopLevel() {
-    if (!this.isOpen()) return;
-    const fs =
-      !this.mainWindow.isDestroyed() &&
-      (this.mainWindow.isFullScreen() || this.playerWindow.isFullScreen());
-    // Stronger level in fullscreen so refocusing the library window (taskbar click,
-    // alt-tab) does not paint it over the player HWND on Windows.
-    this.playerWindow.setAlwaysOnTop(true, fs ? 'screen-saver' : 'floating');
-  }
-
   raisePlayerAboveMain() {
     if (!this.isOpen()) return;
-    this.syncAlwaysOnTopLevel();
     // Keep the video/controls HWND above the library window while dragging or resizing.
     this.playerWindow.moveTop();
   }
@@ -91,9 +80,7 @@ class PlayerWindows {
     if (!this.isOpen() || this.mainWindow.isDestroyed()) return;
     this.syncBounds();
     this.raisePlayerAboveMain();
-    if (this.mainWindow.isFullScreen()) {
-      this.playerWindow.focus();
-    }
+    this.playerWindow.focus();
   }
 
   applyPlayerFullscreen(isFullscreen) {
@@ -111,7 +98,6 @@ class PlayerWindows {
     } else {
       this.playerWindow.setBounds(this.getTargetBounds());
     }
-    this.syncAlwaysOnTopLevel();
     this.raisePlayerAboveMain();
     this.playerWindow.webContents.send('player-fullscreen', isFullscreen);
   }
@@ -129,9 +115,8 @@ class PlayerWindows {
     if (!this.isOpen()) return;
     this.syncBounds();
     this.playerWindow.show();
-    if (!this.mainWindow.isFullScreen()) {
-      this.playerWindow.focus();
-    }
+    this.raisePlayerAboveMain();
+    this.playerWindow.focus();
   }
 
   /**
@@ -147,7 +132,7 @@ class PlayerWindows {
 
   handlePlayerBlur() {
     if (!this.isOpen() || this.mainWindow.isDestroyed()) return;
-    if (this.mainWindow.isFocused() && this.mainWindow.isFullScreen()) {
+    if (this.mainWindow.isFocused()) {
       setImmediate(() => this.restorePlayerStack());
     }
   }
@@ -162,8 +147,6 @@ class PlayerWindows {
 
     this.playerWindow = new BrowserWindow({
       ...this.getTargetBounds(),
-      // No `parent`: an owned window is filtered out of share pickers and
-      // Windows refuses it a taskbar button.
       title,
       frame: false,
       transparent: true,
@@ -172,9 +155,8 @@ class PlayerWindows {
       minimizable: false,
       maximizable: false,
       fullscreenable: true,
-      // focusable: false would force skipTaskbar on, hiding it from pickers.
       focusable: true,
-      skipTaskbar: false,
+      skipTaskbar: true,
       show: false,
       hasShadow: false,
       backgroundColor: '#00000000',
@@ -196,8 +178,6 @@ class PlayerWindows {
       this.playerWindow.loadFile(this.indexHtmlPath, { query: { player: '1' } });
     }
     this.playerWindow.setTitle(title);
-
-    this.syncAlwaysOnTopLevel();
 
     this.playerWindow.once('ready-to-show', () => {
       if (!this.isOpen()) return;
@@ -269,7 +249,6 @@ class PlayerWindows {
     if (player && !player.isDestroyed()) {
       if (player.isFullScreen()) player.setFullScreen(false);
       player.removeListener('blur', this.handlePlayerBlur);
-      player.setAlwaysOnTop(false);
       player.removeAllListeners('closed');
       player.destroy();
     }
