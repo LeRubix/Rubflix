@@ -35,6 +35,7 @@ declare global {
     path: string;
     title: string;
     subtitle?: string;
+    thumbnail?: string | null;
     profileId: string;
     startTime: number;
     prev?: { path: string; title: string; subtitle?: string; thumbnail?: string } | null;
@@ -111,6 +112,7 @@ declare global {
       selectSubtitleFile: () => Promise<string | null>;
       setDiscordRpcEnabled: (enabled: boolean) => Promise<{ ok: boolean }>;
       setDiscordRpcClientId: (clientId: string) => Promise<{ ok: boolean }>;
+      setDiscordRpcActivityStyle?: (style: 'media' | 'watching' | 'playing') => Promise<{ ok: boolean }>;
 
       playerStart: (session: PlayerSession) => Promise<{ ok: boolean }>;
       onPlayerExited: (callback: (payload: PlayerExitPayload | null) => void) => () => void;

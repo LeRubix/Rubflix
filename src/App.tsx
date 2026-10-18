@@ -34,6 +34,7 @@ import {
   buildSearchCatalog,
   buildHeroCatalog,
   buildGenreRows,
+  getSeriesRoot,
   resolvePlayTarget,
   resolveShowDetailTarget,
 } from './utils/grouping';
@@ -231,6 +232,9 @@ export default function App() {
     saveSettings(settings);
     window.electronAPI?.setAppIcon?.('default');
     window.electronAPI?.setDiscordRpcEnabled?.(settings.discordRpcEnabled ?? true);
+    if (settings.discordActivityStyle) {
+      window.electronAPI?.setDiscordRpcActivityStyle?.(settings.discordActivityStyle);
+    }
   }, [settings]);
 
   useEffect(() => {
@@ -446,10 +450,36 @@ export default function App() {
     if (video.duration && startTime > video.duration - 30) startTime = 0;
     const allKnown = filesRef.current.length > 0 ? filesRef.current : files;
     const { prev, next } = getAdjacentEpisodes(allKnown, video);
+
+    const resolveOnlineImage = (target?: LocalFile): string | undefined => {
+      if (!target) return undefined;
+      const candidates = [target.thumbnail, target.meta?.poster];
+      for (const c of candidates) {
+        if (typeof c === 'string' && /^https?:\/\//i.test(c)) {
+          return c;
+        }
+      }
+      return undefined;
+    };
+
+    let onlineThumbnail = resolveOnlineImage(video);
+
+    // If it's an episode or nested item without its own online artwork, resolve from parent show or overrides
+    if (!onlineThumbnail) {
+      const root = getSeriesRoot(video.relativePath);
+      if (root) {
+        const parent = allKnown.find(
+          (f) => f.isFolder && (f.relativePath === root || f.folderName === root || f.path === `folder://${root}`)
+        );
+        onlineThumbnail = resolveOnlineImage(parent);
+      }
+    }
+
     return {
       path: video.path,
       title: getPlayerDisplayTitle(video),
       subtitle: episodeLabel(video),
+      thumbnail: onlineThumbnail,
       profileId: activeProfile,
       startTime,
       prev: prev
@@ -457,6 +487,7 @@ export default function App() {
             path: prev.path,
             title: getPlayerDisplayTitle(prev),
             subtitle: episodeLabel(prev),
+            thumbnail: resolveOnlineImage(prev) || onlineThumbnail,
           }
         : null,
       next: next
@@ -464,6 +495,7 @@ export default function App() {
             path: next.path,
             title: getPlayerDisplayTitle(next),
             subtitle: episodeLabel(next),
+            thumbnail: resolveOnlineImage(next) || onlineThumbnail,
           }
         : null,
       appName: settings.appName,

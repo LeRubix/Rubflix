@@ -13,6 +13,7 @@ class DiscordRpcManager {
     this.reconnectTimer = null;
     this.lastState = null;
     this.lastSession = null;
+    this.activityStyle = 'media'; // 'media' (type 2 - scrubber timeline), 'watching' (type 3), 'playing' (type 0)
   }
 
   init(clientId) {
@@ -20,6 +21,15 @@ class DiscordRpcManager {
       this.clientId = clientId;
     }
     this.connect();
+  }
+
+  setActivityStyle(style) {
+    if (['media', 'watching', 'playing'].includes(style)) {
+      this.activityStyle = style;
+      if (this.lastSession && this.lastState) {
+        this.updatePlayback(this.lastSession, this.lastState);
+      }
+    }
   }
 
   connect() {
@@ -117,22 +127,32 @@ class DiscordRpcManager {
     const subtitle = session.subtitle || (session.isFolder ? 'TV Series' : 'Movie');
     const isPaused = Boolean(state?.pause);
 
+    // Pick large image: if session has an online thumbnail (http/https), Discord's media proxy will render it!
+    const hasOnlineThumb = typeof session.thumbnail === 'string' && /^https?:\/\//i.test(session.thumbnail);
+    const largeImage = hasOnlineThumb ? session.thumbnail : 'mpv';
+
+    let activityType = 2; // Type 2 (Listening) triggers Discord's media player scrubber bar (▶ 00:03 ━━━ 03:29)
+    if (this.activityStyle === 'watching') activityType = 3;
+    if (this.activityStyle === 'playing') activityType = 0;
+
     const activity = {
+      type: activityType,
       details: title.length > 128 ? title.slice(0, 125) + '...' : title,
       state: isPaused ? `${subtitle} (Paused)` : subtitle,
-      largeImageKey: 'mpv',
-      largeImageText: 'Kudflix',
+      largeImageKey: largeImage,
+      largeImageText: title,
       smallImageKey: isPaused ? 'pause' : 'play',
       smallImageText: isPaused ? 'Paused' : 'Playing',
       instance: false,
     };
 
+    // Unix epoch timestamps in SECONDS
     if (!isPaused && state?.duration && state.duration > 0 && typeof state?.timePos === 'number') {
-      const now = Date.now();
-      const currentMs = state.timePos * 1000;
-      const durationMs = state.duration * 1000;
-      activity.startTimestamp = Math.floor(now - currentMs);
-      activity.endTimestamp = Math.floor(now + (durationMs - currentMs));
+      const now = Math.floor(Date.now() / 1000);
+      const currentSec = Math.floor(state.timePos);
+      const durationSec = Math.floor(state.duration);
+      activity.startTimestamp = now - currentSec;
+      activity.endTimestamp = now + (durationSec - currentSec);
     }
 
     this.currentActivity = activity;
@@ -142,7 +162,31 @@ class DiscordRpcManager {
   applyActivity(activity) {
     if (!this.connected || !this.client || !this.enabled) return;
     try {
-      this.client.setActivity(activity).catch(() => {});
+      const pid = process.pid;
+      const timestamps = (activity.startTimestamp || activity.endTimestamp) ? {
+        start: activity.startTimestamp,
+        end: activity.endTimestamp,
+      } : undefined;
+
+      const assets = (activity.largeImageKey || activity.smallImageKey) ? {
+        large_image: activity.largeImageKey,
+        large_text: activity.largeImageText,
+        small_image: activity.smallImageKey,
+        small_text: activity.smallImageText,
+      } : undefined;
+
+      // Send directly via request('SET_ACTIVITY') so activity.type is preserved
+      this.client.request('SET_ACTIVITY', {
+        pid,
+        activity: {
+          type: typeof activity.type === 'number' ? activity.type : 2,
+          state: activity.state,
+          details: activity.details,
+          timestamps,
+          assets,
+          instance: false,
+        },
+      }).catch(() => {});
     } catch {
       // ignore
     }
@@ -154,7 +198,7 @@ class DiscordRpcManager {
     this.lastState = null;
     if (this.connected && this.client) {
       try {
-        this.client.clearActivity().catch(() => {});
+        this.client.request('SET_ACTIVITY', { pid: process.pid }).catch(() => {});
       } catch {
         // ignore
       }

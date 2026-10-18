@@ -541,3 +541,8 @@ ipcMain.handle('discord-rpc-set-client-id', (event, clientId) => {
   discordRpc.setClientId(clientId);
   return { ok: true };
 });
+
+ipcMain.handle('discord-rpc-set-activity-style', (event, style) => {
+  discordRpc.setActivityStyle(style);
+  return { ok: true };
+});

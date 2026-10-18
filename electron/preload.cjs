@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectSubtitleFile: () => ipcRenderer.invoke('select-subtitle-file'),
   setDiscordRpcEnabled: (enabled) => ipcRenderer.invoke('discord-rpc-set-enabled', enabled),
   setDiscordRpcClientId: (id) => ipcRenderer.invoke('discord-rpc-set-client-id', id),
+  setDiscordRpcActivityStyle: (style) => ipcRenderer.invoke('discord-rpc-set-activity-style', style),
 
   // Library window
   playerStart: (session) => ipcRenderer.invoke('player-start', session),

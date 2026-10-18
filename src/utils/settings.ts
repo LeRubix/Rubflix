@@ -52,6 +52,7 @@ const DEFAULT_SETTINGS: Settings = {
   watchedIndicatorMode: 'always' as const,
   detailModalActionsMode: 'menu' as const,
   discordRpcEnabled: true,
+  discordActivityStyle: 'media' as const,
 };
 
 export function loadSettings(): Settings {
@@ -91,6 +92,10 @@ export function loadSettings(): Settings {
             : 'always',
         detailModalActionsMode: parsed.detailModalActionsMode === 'icons' ? 'icons' : 'menu',
         discordRpcEnabled: parsed.discordRpcEnabled ?? true,
+        discordActivityStyle:
+          parsed.discordActivityStyle === 'watching' || parsed.discordActivityStyle === 'playing'
+            ? parsed.discordActivityStyle
+            : 'media',
       };
     }
 

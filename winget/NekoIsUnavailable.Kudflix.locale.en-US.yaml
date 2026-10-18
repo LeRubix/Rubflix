@@ -1,5 +1,5 @@
 PackageIdentifier: NekoIsUnavailable.Kudflix
-PackageVersion: 1.4.7
+PackageVersion: 1.4.8
 PackageLocale: en-US
 Publisher: NekoIsUnavailable
 PublisherUrl: https://github.com/NekoIsUnavailable
@@ -21,6 +21,6 @@ Tags:
 - offline
 - desktop
 - local-media
-ReleaseNotesUrl: https://github.com/NekoIsUnavailable/Kudflix/releases/tag/v1.4.7
+ReleaseNotesUrl: https://github.com/NekoIsUnavailable/Kudflix/releases/tag/v1.4.8
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
