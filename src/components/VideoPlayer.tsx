@@ -96,7 +96,11 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
 
         const result = await api.playerOpen(session.path, options);
         if (cancelled) return;
-        if (!result.ok) setOpenError(result.error || 'Could not start playback.');
+        if (!result.ok) {
+          setOpenError(result.error || 'Could not start playback.');
+        } else if (result.state) {
+          setState(result.state);
+        }
       } catch (err: any) {
         if (cancelled) return;
         console.error('[VideoPlayer] failed to open:', err);
@@ -246,11 +250,20 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     api.playerExit({ path: session.path, position: timePos, duration });
   }, [api, persistProgress, session.path]);
 
+  const playPrev = useCallback(() => {
+    if (!session.prev || requestedNext.current) return;
+    requestedNext.current = true;
+    setTimeout(() => { requestedNext.current = false; }, 3000);
+    persistProgress();
+    api.playerRequestPrev(session.prev.path);
+  }, [api, persistProgress, session.prev]);
+
   const playNext = useCallback(() => {
     if (!session.next || requestedNext.current) return;
     requestedNext.current = true;
+    setTimeout(() => { requestedNext.current = false; }, 3000);
     persistProgress();
-    api.playerRequestNext();
+    api.playerRequestNext(session.next.path);
   }, [api, persistProgress, session.next]);
 
   const handleEscape = useCallback(() => {
@@ -267,6 +280,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     onFullscreen: toggleFullscreen,
     onEscape: handleEscape,
     onSubtitlesToggle: () => setOpenPanel((p) => (p === 'tracks' ? null : 'tracks')),
+    onPrev: session.prev ? playPrev : undefined,
     onNext: session.next ? playNext : undefined,
     onActivity: poke,
   });
@@ -359,6 +373,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
           subtitleTracks={subtitleTracks}
           selectedAudioId={selectedAudioId}
           selectedSubtitleId={selectedSubtitleId}
+          hasPrev={Boolean(session.prev)}
           hasNext={Boolean(session.next)}
           onPanelChange={setOpenPanel}
           onBack={exitPlayer}
@@ -374,7 +389,8 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
           subtitleStyle={subtitleStyle}
           onSubtitleStyleChange={updateSubtitleStyle}
           onFullscreen={toggleFullscreen}
-          onNext={playNext}
+          onPrev={session.prev ? playPrev : undefined}
+          onNext={session.next ? playNext : undefined}
           onScrubbingChange={setScrubbing}
         />
       )}

@@ -37,6 +37,7 @@ declare global {
     subtitle?: string;
     profileId: string;
     startTime: number;
+    prev?: { path: string; title: string; subtitle?: string; thumbnail?: string } | null;
     next: { path: string; title: string; subtitle?: string; thumbnail?: string } | null;
     /** Names the player window so it is recognisable in screen-share pickers. */
     appName?: string;
@@ -113,7 +114,8 @@ declare global {
 
       playerStart: (session: PlayerSession) => Promise<{ ok: boolean }>;
       onPlayerExited: (callback: (payload: PlayerExitPayload | null) => void) => () => void;
-      onPlayerRequestNext: (callback: (currentPath: string | null) => void) => () => void;
+      onPlayerRequestNext: (callback: (targetPath: string | null) => void) => () => void;
+      onPlayerRequestPrev: (callback: (targetPath: string | null) => void) => () => void;
 
       playerGetSession: () => Promise<PlayerSession | null>;
       onPlayerSession: (callback: (session: PlayerSession) => void) => () => void;
@@ -121,7 +123,8 @@ declare global {
       playerCommand: (action: string, value?: unknown) => Promise<{ ok: boolean; error?: string }>;
       playerToggleFullscreen: () => Promise<boolean>;
       playerSetFullscreen: (fullscreen: boolean) => Promise<boolean>;
-      playerRequestNext: () => Promise<{ ok: boolean }>;
+      playerRequestNext: (targetPath?: string) => Promise<{ ok: boolean }>;
+      playerRequestPrev: (targetPath?: string) => Promise<{ ok: boolean }>;
       playerExit: (payload: PlayerExitPayload | null) => Promise<{ ok: boolean }>;
       onPlayerState: (callback: (state: PlayerState) => void) => () => void;
       onPlayerFullscreen: (callback: (fullscreen: boolean) => void) => () => void;

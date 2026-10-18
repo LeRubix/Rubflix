@@ -6,6 +6,8 @@ export interface MediaOverride {
   genre?: string;
   year?: string;
   tmdbId?: string;
+  anilistId?: string;
+  provider?: 'tmdb' | 'anilist';
   disableTmdb?: boolean;
   useSeriesThumbnailForEpisodes?: boolean;
 }
@@ -31,6 +33,10 @@ export function saveMediaOverride(path: string, override: MediaOverride): void {
   if ('tmdbId' in override) {
     if (override.tmdbId) merged.tmdbId = override.tmdbId;
     else delete merged.tmdbId;
+  }
+  if ('anilistId' in override) {
+    if (override.anilistId) merged.anilistId = override.anilistId;
+    else delete merged.anilistId;
   }
   all[path] = merged;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));

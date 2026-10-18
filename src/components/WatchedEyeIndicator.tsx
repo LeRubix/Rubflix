@@ -13,9 +13,9 @@ export function WatchedEyeIndicator({
   hovered?: boolean;
   size?: 'default' | 'small';
 }) {
+  const brightness = useImageBrightness(imageSrc, 'top');
   if (mode === 'never') return null;
 
-  const brightness = useImageBrightness(imageSrc, 'top');
   const isLight = brightness === 'light';
   const show = mode === 'always' || (mode === 'hover' && hovered);
 

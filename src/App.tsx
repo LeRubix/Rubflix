@@ -19,6 +19,8 @@ import {
 } from './utils/mediaOverrides';
 import { resolveFileMeta } from './utils/metadata';
 import { getPlayerDisplayTitle } from './utils/displayTitle';
+import { getAdjacentEpisodes } from './utils/episodeNavigation';
+import { resolveEpisodeNumbers, parseEpisodeFromText } from './utils/episodeParsing';
 import { loadSettings, saveSettings } from './utils/settings';
 import { StartupScreen } from './components/StartupScreen';
 import { ProfilesScreen } from './components/ProfilesScreen';
@@ -235,8 +237,9 @@ export default function App() {
     window.electronAPI?.updateLibraryWatch?.([
       ...settings.movieFolders,
       ...settings.tvFolders,
+      ...(settings.animeFolders || []),
     ]);
-  }, [settings.movieFolders, settings.tvFolders]);
+  }, [settings.movieFolders, settings.tvFolders, settings.animeFolders]);
 
   const refreshVideoFromLibrary = (file: LocalFile): LocalFile => {
     const meta = resolveFileMeta(
@@ -366,7 +369,7 @@ export default function App() {
     };
 
     if (incremental) return execute();
-    const folderKey = settings.movieFolders.join('\0') + '\0' + settings.tvFolders.join('\0');
+    const folderKey = settings.movieFolders.join('\0') + '\0' + settings.tvFolders.join('\0') + '\0' + (settings.animeFolders || []).join('\0');
     return runInitialScanOnce(folderKey, execute);
   }, [settings]);
 
@@ -375,8 +378,8 @@ export default function App() {
     setShowSettings(true);
   };
 
-  const hasLibrary = settings.movieFolders.length > 0 || settings.tvFolders.length > 0;
-  const libraryFolderKey = settings.movieFolders.join('\0') + '\0' + settings.tvFolders.join('\0');
+  const hasLibrary = settings.movieFolders.length > 0 || settings.tvFolders.length > 0 || (settings.animeFolders?.length ?? 0) > 0;
+  const libraryFolderKey = settings.movieFolders.join('\0') + '\0' + settings.tvFolders.join('\0') + '\0' + (settings.animeFolders || []).join('\0');
   const loadedLibraryKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -422,31 +425,17 @@ export default function App() {
     return false;
   };
 
-  const getNextEpisode = (currentVideo: LocalFile | null): LocalFile | null => {
-    if (!currentVideo || currentVideo.category !== 'tv') return null;
-
-    const match = currentVideo.name.match(/(.*?)(s\d+e)(\d+)/i);
-    if (match) {
-      const [, prefix, s_e, epDigits] = match;
-      const nextEpStr = (parseInt(epDigits, 10) + 1).toString().padStart(epDigits.length, '0');
-      const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const nextRegex = new RegExp(`^${escapedPrefix}${s_e}${nextEpStr}(?!\\d)`, 'i');
-      const next = files.find(f => nextRegex.test(f.name));
-      if (next) return next;
-    }
-
-    // Fallback: next file in the same folder, in natural sort order
-    const dir = currentVideo.path.replace(/[\\/][^\\/]*$/, '');
-    const siblings = files
-      .filter(f => !f.isFolder && f.category === 'tv' && f.path.replace(/[\\/][^\\/]*$/, '') === dir)
-      .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
-    const index = siblings.findIndex(f => f.path === currentVideo.path);
-    return index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : null;
-  };
 
   const episodeLabel = (video: LocalFile) => {
-    const m = video.name.match(/s(\d+)e(\d+)/i);
-    return m ? `S${parseInt(m[1], 10)}:E${parseInt(m[2], 10)}` : undefined;
+    const parsed = resolveEpisodeNumbers(video.name, video.relativePath);
+    if (parsed) {
+      return `S${parsed.season}:E${parsed.episode}`;
+    }
+    const epNum = parseEpisodeFromText(video.name);
+    if (epNum != null) {
+      return `Episode ${epNum}`;
+    }
+    return undefined;
   };
 
   const buildSession = (video: LocalFile): PlayerSession | null => {
@@ -455,13 +444,21 @@ export default function App() {
     let startTime = progress[video.path] || 0;
     // Restart finished items from the beginning
     if (video.duration && startTime > video.duration - 30) startTime = 0;
-    const next = getNextEpisode(video);
+    const allKnown = filesRef.current.length > 0 ? filesRef.current : files;
+    const { prev, next } = getAdjacentEpisodes(allKnown, video);
     return {
       path: video.path,
       title: getPlayerDisplayTitle(video),
       subtitle: episodeLabel(video),
       profileId: activeProfile,
       startTime,
+      prev: prev
+        ? {
+            path: prev.path,
+            title: getPlayerDisplayTitle(prev),
+            subtitle: episodeLabel(prev),
+          }
+        : null,
       next: next
         ? {
             path: next.path,
@@ -510,8 +507,8 @@ export default function App() {
   }, []);
 
   // Keep handlers fresh for the IPC listeners below without re-subscribing
-  const playerHandlersRef = useRef({ handlePlayVideo, getNextEpisode, files });
-  playerHandlersRef.current = { handlePlayVideo, getNextEpisode, files };
+  const playerHandlersRef = useRef({ handlePlayVideo, files });
+  playerHandlersRef.current = { handlePlayVideo, files };
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -533,20 +530,58 @@ export default function App() {
       }
     });
 
-    const offNext = api.onPlayerRequestNext((currentPath) => {
-      const { files: list, getNextEpisode: findNext, handlePlayVideo: play } = playerHandlersRef.current;
-      const current = list.find(f => f.path === currentPath) ?? null;
-      const next = findNext(current);
-      if (next) play(next);
+    const norm = (p: string) => {
+      try {
+        return decodeURIComponent(p).replace(/\\/g, '/').toLowerCase();
+      } catch {
+        return p.replace(/\\/g, '/').toLowerCase();
+      }
+    };
+
+    const offNext = api.onPlayerRequestNext((targetOrCurrentPath) => {
+      if (!targetOrCurrentPath) return;
+      const { files: list, handlePlayVideo: play } = playerHandlersRef.current;
+      const allKnown = list.length > 0 ? list : filesRef.current;
+      const matched = allKnown.find((f) => norm(f.path) === norm(targetOrCurrentPath));
+      const currentPlaying = playingVideoRef.current;
+
+      if (matched && (!currentPlaying || norm(matched.path) !== norm(currentPlaying.path))) {
+        play(matched);
+      } else {
+        const reference = matched || currentPlaying;
+        const { next } = getAdjacentEpisodes(allKnown, reference ?? null);
+        if (next) play(next);
+      }
     });
 
-    return () => { offExited(); offNext(); };
+    const offPrev = api.onPlayerRequestPrev?.((targetOrCurrentPath) => {
+      if (!targetOrCurrentPath) return;
+      const { files: list, handlePlayVideo: play } = playerHandlersRef.current;
+      const allKnown = list.length > 0 ? list : filesRef.current;
+      const matched = allKnown.find((f) => norm(f.path) === norm(targetOrCurrentPath));
+      const currentPlaying = playingVideoRef.current;
+
+      if (matched && (!currentPlaying || norm(matched.path) !== norm(currentPlaying.path))) {
+        play(matched);
+      } else {
+        const reference = matched || currentPlaying;
+        const { prev } = getAdjacentEpisodes(allKnown, reference ?? null);
+        if (prev) play(prev);
+      }
+    });
+
+    return () => {
+      offExited();
+      offNext();
+      offPrev?.();
+    };
   }, [activeProfile]);
 
   // Grouping for rows
   const {
     movies,
     folders,
+    animeCatalog,
     top10,
     continueWatchingAll,
     continueWatchingMovies,
@@ -556,9 +591,12 @@ export default function App() {
     searchCatalog,
     heroCatalog,
   } = useMemo(() => {
-    const shows = files.filter(f => f.category === 'tv');
+    const shows = files.filter(f => f.category === 'tv' || f.category === 'anime');
     const movies = files.filter(f => f.category === 'movie');
     const folders = buildSeriesFolders(shows);
+    const animeShows = folders.filter(f => f.category === 'anime' || f.folderFiles?.some(ep => ep.category === 'anime'));
+    const animeMovies = movies.filter(f => f.category === 'anime');
+    const animeCatalog = [...animeShows, ...animeMovies];
 
     const playCounts = JSON.parse(localStorage.getItem(`netflix_playcounts_${activeProfile}`) || '{}');
     const top10 = buildTop10(movies, shows, playCounts, folders);
@@ -573,6 +611,7 @@ export default function App() {
     return {
       movies,
       folders,
+      animeCatalog,
       top10,
       continueWatchingAll,
       continueWatchingMovies,
@@ -624,7 +663,7 @@ export default function App() {
     if (files.length === 0 || loading || librarySyncing) return;
 
     const movies = files.filter((f) => f.category === 'movie');
-    const seriesFolders = buildSeriesFolders(files.filter((f) => f.category === 'tv'));
+    const seriesFolders = buildSeriesFolders(files.filter((f) => f.category === 'tv' || f.category === 'anime'));
     const priority = [...heroCatalog, ...top10, ...continueWatchingAll];
     const gen = ++tmdbPrefetchGenRef.current;
 
@@ -640,7 +679,7 @@ export default function App() {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [files.length, libraryFolderKey, loading, librarySyncing, heroCatalog, top10, continueWatchingAll]);
+  }, [files, libraryFolderKey, loading, librarySyncing, heroCatalog, top10, continueWatchingAll]);
 
   // 1. Initial 3s delay on image
   useEffect(() => {
@@ -981,6 +1020,10 @@ export default function App() {
             
             {(activeTab === 'home' || activeTab === 'tv') && folders.length > 0 && (
               <ContentRow title="Series" videos={folders} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
+            )}
+
+            {activeTab === 'home' && animeCatalog.length > 0 && (
+              <ContentRow title="Anime" videos={animeCatalog} onPlay={handlePlayVideo} onInfo={handleOpenInfo} progresses={progresses} expandable activeProfileId={activeProfile} watchedIndicatorMode={settings.watchedIndicatorMode} />
             )}
             
             {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (

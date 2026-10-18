@@ -26,6 +26,7 @@ export interface Settings {
   externalPlayerPath: string;
   movieFolders: string[];
   tvFolders: string[];
+  animeFolders?: string[];
   skipProfilePicker: boolean;
   defaultProfileId: string | null;
   compactLibraryButton: boolean;
@@ -59,6 +60,7 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     appName: truncateAppName(currentSettings.appName ?? DEFAULT_APP_NAME),
     movieFolders: currentSettings.movieFolders ?? [],
     tvFolders: currentSettings.tvFolders ?? [],
+    animeFolders: currentSettings.animeFolders ?? [],
     skipProfilePicker: currentSettings.skipProfilePicker ?? false,
     defaultProfileId: currentSettings.defaultProfileId ?? null,
     compactLibraryButton: currentSettings.compactLibraryButton ?? false,
@@ -165,12 +167,12 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     if (path) setSettings({ ...settings, wallpaperPath: path });
   };
 
-  const addFolders = async (type: 'movie' | 'tv') => {
+  const addFolders = async (type: 'movie' | 'tv' | 'anime') => {
     if (!window.electronAPI?.selectFolders) return;
     const selected = await window.electronAPI.selectFolders();
     if (!selected.length) return;
-    const key = type === 'movie' ? 'movieFolders' : 'tvFolders';
-    const existing = settings[key];
+    const key = type === 'movie' ? 'movieFolders' : type === 'tv' ? 'tvFolders' : 'animeFolders';
+    const existing = settings[key] ?? [];
     const merged = [...existing];
     for (const folder of selected) {
       if (!merged.includes(folder)) merged.push(folder);
@@ -178,9 +180,9 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
     setSettings({ ...settings, [key]: merged });
   };
 
-  const removeFolder = (type: 'movie' | 'tv', folder: string) => {
-    const key = type === 'movie' ? 'movieFolders' : 'tvFolders';
-    setSettings({ ...settings, [key]: settings[key].filter(f => f !== folder) });
+  const removeFolder = (type: 'movie' | 'tv' | 'anime', folder: string) => {
+    const key = type === 'movie' ? 'movieFolders' : type === 'tv' ? 'tvFolders' : 'animeFolders';
+    setSettings({ ...settings, [key]: (settings[key] ?? []).filter(f => f !== folder) });
   };
 
   const handleCustomAvatarUpload = () => {
@@ -432,6 +434,29 @@ export function SettingsModal({ onClose, onSave, currentSettings, activeProfileI
                   className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-white text-sm font-semibold transition"
                 >
                   <FolderOpen className="w-4 h-4" /> Add TV Folder(s)
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-3">Anime Folders (AniList)</label>
+                <div className="space-y-2 mb-3">
+                  {(settings.animeFolders ?? []).length === 0 ? (
+                    <p className="text-xs text-gray-500 italic">No anime folders selected. Anime in these folders will automatically query AniList.</p>
+                  ) : (settings.animeFolders ?? []).map(folder => (
+                    <div key={folder} className="flex items-center gap-2 bg-black/50 border border-gray-700 rounded-lg px-3 py-2">
+                      <FolderOpen className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span className="text-sm text-gray-300 truncate flex-grow" title={folder}>{folder}</span>
+                      <button onClick={() => removeFolder('anime', folder)} className="text-gray-500 hover:text-red-400 transition flex-shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => addFolders('anime')}
+                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-white text-sm font-semibold transition"
+                >
+                  <FolderOpen className="w-4 h-4" /> Add Anime Folder(s)
                 </button>
               </div>
 

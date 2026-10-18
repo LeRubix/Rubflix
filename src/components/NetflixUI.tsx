@@ -45,7 +45,7 @@ export interface LocalFile {
   name: string;
   path: string;
   relativePath?: string;
-  category?: 'movie' | 'tv';
+  category?: 'movie' | 'tv' | 'anime';
   meta?: { title?: string; description?: string; poster?: string | null; year?: string; genre?: string; };
   thumbnail?: string;
   duration?: number;
@@ -354,14 +354,17 @@ export function DetailModal({
   const useLocalOnly = isTmdbDisabled(video);
   const tmdb = useTMDBDetails(video);
   const [isEditing, setIsEditing] = useState(false);
+  const currentOverride = getMediaOverride(video.path);
   const [editForm, setEditForm] = useState({
     title: video.meta?.title || video.name,
     description: video.meta?.description || '',
     genre: video.meta?.genre || '',
     year: video.meta?.year || '',
-    tmdbId: getMediaOverride(video.path)?.tmdbId ?? '',
-    disableTmdb: getMediaOverride(video.path)?.disableTmdb ?? false,
-    useSeriesThumbnailForEpisodes: getMediaOverride(video.path)?.useSeriesThumbnailForEpisodes ?? false,
+    provider: currentOverride?.provider ?? (video.category === 'anime' ? ('anilist' as const) : ('tmdb' as const)),
+    tmdbId: currentOverride?.tmdbId ?? '',
+    anilistId: currentOverride?.anilistId ?? '',
+    disableTmdb: currentOverride?.disableTmdb ?? false,
+    useSeriesThumbnailForEpisodes: currentOverride?.useSeriesThumbnailForEpisodes ?? false,
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -370,21 +373,24 @@ export function DetailModal({
   const heroOverflowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const ov = getMediaOverride(video.path);
     setEditForm({
       title: video.meta?.title || video.name,
       description: video.meta?.description || '',
       genre: video.meta?.genre || '',
       year: video.meta?.year || '',
-      tmdbId: getMediaOverride(video.path)?.tmdbId ?? '',
-      disableTmdb: getMediaOverride(video.path)?.disableTmdb ?? false,
-      useSeriesThumbnailForEpisodes: getMediaOverride(video.path)?.useSeriesThumbnailForEpisodes ?? false,
+      provider: ov?.provider ?? (video.category === 'anime' ? 'anilist' : 'tmdb'),
+      tmdbId: ov?.tmdbId ?? '',
+      anilistId: ov?.anilistId ?? '',
+      disableTmdb: ov?.disableTmdb ?? false,
+      useSeriesThumbnailForEpisodes: ov?.useSeriesThumbnailForEpisodes ?? false,
     });
     setEditError(null);
     setIsEditing(false);
     setShowResetConfirm(false);
     setHeroOverflowOpen(false);
     setHeroListsOpen(false);
-  }, [video.path, video.meta?.title, video.meta?.description, video.meta?.genre, video.meta?.year, video.name, video.tmdbDisabled]);
+  }, [video.path, video.category, video.meta?.title, video.meta?.description, video.meta?.genre, video.meta?.year, video.name, video.tmdbDisabled]);
 
   useEffect(() => {
     if (!heroOverflowOpen) return;
@@ -403,13 +409,20 @@ export function DetailModal({
       setEditError('TMDB ID must be a number.');
       return;
     }
+    const trimmedAniListId = editForm.anilistId.trim();
+    if (trimmedAniListId && !/^\d+$/.test(trimmedAniListId)) {
+      setEditError('AniList ID must be a number.');
+      return;
+    }
     setEditError(null);
     const override: MediaOverride = {
       title: editForm.title.trim() || undefined,
       description: editForm.description.trim() || undefined,
       genre: editForm.genre.trim() || undefined,
       year: editForm.year.trim() || undefined,
+      provider: editForm.provider,
       tmdbId: trimmedTmdbId,
+      anilistId: trimmedAniListId,
       disableTmdb: editForm.disableTmdb,
       useSeriesThumbnailForEpisodes: video.isFolder ? editForm.useSeriesThumbnailForEpisodes : undefined,
     };
@@ -783,18 +796,59 @@ export function DetailModal({
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-gray-500 block mb-1">TMDB ID</label>
-                    <input
-                      type="text"
-                      value={editForm.tmdbId}
-                      onChange={(e) => setEditForm({ ...editForm, tmdbId: e.target.value })}
-                      placeholder={video.isFolder ? 'TV show ID from themoviedb.org' : 'Movie ID from themoviedb.org'}
-                      className="w-full bg-black/50 border border-gray-600 rounded-lg px-4 py-2 text-white outline-none focus:border-white transition"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Optional. When set, metadata is fetched by ID instead of title search. Find it on{' '}
-                      <a href="https://www.themoviedb.org" className="text-gray-400 hover:text-white underline" target="_blank" rel="noreferrer">themoviedb.org</a>.
-                    </p>
+                    <label className="text-xs font-semibold text-gray-500 block mb-1">Metadata Provider</label>
+                    <div className="flex gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, provider: 'tmdb' })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                          editForm.provider !== 'anilist' ? 'bg-white text-black' : 'bg-zinc-800 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        TMDB
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, provider: 'anilist' })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                          editForm.provider === 'anilist' ? 'bg-white text-black' : 'bg-zinc-800 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        AniList (Anime)
+                      </button>
+                    </div>
+
+                    {editForm.provider === 'anilist' ? (
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">AniList ID</label>
+                        <input
+                          type="text"
+                          value={editForm.anilistId}
+                          onChange={(e) => setEditForm({ ...editForm, anilistId: e.target.value })}
+                          placeholder="e.g. 21355 from anilist.co"
+                          className="w-full bg-black/50 border border-gray-600 rounded-lg px-4 py-2 text-white outline-none focus:border-white transition"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Optional. Find the anime ID on{' '}
+                          <a href="https://anilist.co" className="text-gray-400 hover:text-white underline" target="_blank" rel="noreferrer">anilist.co</a>.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">TMDB ID</label>
+                        <input
+                          type="text"
+                          value={editForm.tmdbId}
+                          onChange={(e) => setEditForm({ ...editForm, tmdbId: e.target.value })}
+                          placeholder={video.isFolder ? 'TV show ID from themoviedb.org' : 'Movie ID from themoviedb.org'}
+                          className="w-full bg-black/50 border border-gray-600 rounded-lg px-4 py-2 text-white outline-none focus:border-white transition"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Optional. When set, metadata is fetched by ID instead of title search. Find it on{' '}
+                          <a href="https://www.themoviedb.org" className="text-gray-400 hover:text-white underline" target="_blank" rel="noreferrer">themoviedb.org</a>.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   {editError && <p className="text-xs text-red-400">{editError}</p>}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

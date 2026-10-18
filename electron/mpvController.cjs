@@ -58,6 +58,7 @@ class MpvController {
     this.emitTimer = null;
     this.expectingExit = false;
     this.resumeAfterLoad = null;
+    this.currentHwnd = null;
   }
 
   emit(immediate = false) {
@@ -85,11 +86,60 @@ class MpvController {
   }
 
   async open(hwnd, filePath, options = {}) {
+    // If mpv is already running in this window, switch to the new file via IPC
+    // without destroying and respawning the process/HWND/swapchain.
+    if (this.process && this.socket && !this.socket.destroyed && this.currentHwnd === hwnd) {
+      try {
+        this.fileLoadFinished = false;
+        this.resumeAfterLoad =
+          options.startTime && options.startTime > 0 ? options.startTime : null;
+        this.state.loaded = false;
+        this.state.buffering = true;
+        this.state.timePos = 0;
+        this.state.duration = 0;
+        this.state.eof = false;
+        this.state.error = null;
+        this.emit(true);
+
+        if (options.volume != null) {
+          await this.setProperty('volume', Math.max(0, Math.min(100, options.volume))).catch(() => {});
+        }
+        if (options.mute != null) {
+          await this.setProperty('mute', Boolean(options.mute)).catch(() => {});
+        }
+        if (options.subtitleId === 'no') {
+          await this.setProperty('sid', 'no').catch(() => {});
+        } else if (typeof options.subtitleId === 'number') {
+          await this.setProperty('sid', options.subtitleId).catch(() => {});
+        }
+
+        await this.command(['loadfile', filePath, 'replace']);
+
+        setTimeout(async () => {
+          try {
+            const dur = await this.getProperty('duration');
+            if (typeof dur === 'number' && dur > 0) {
+              this.state.duration = dur;
+              void this.finishFileLoad();
+            }
+          } catch {
+            // will fire via property change or file-loaded
+          }
+        }, 50);
+
+        return;
+      } catch (err) {
+        console.warn('[mpv] fast loadfile failed, falling back to full spawn:', err);
+      }
+    }
+
     await this.close();
 
+    this.currentHwnd = hwnd;
     this.state = initialState();
     this.state.volume = options.volume ?? 100;
     this.expectingExit = false;
+    this.fileLoadFinished = false;
     this.resumeAfterLoad =
       options.startTime && options.startTime > 0 ? options.startTime : null;
 
@@ -175,6 +225,17 @@ class MpvController {
     for (const prop of OBSERVED_PROPERTIES) {
       this.command(['observe_property', id++, prop]).catch(() => {});
     }
+
+    // Guard against race condition: if file already loaded before IPC connection completed
+    try {
+      const dur = await this.command(['get_property', 'duration']).catch(() => null);
+      if (typeof dur === 'number' && dur > 0 && !this.fileLoadFinished) {
+        void this.finishFileLoad();
+      }
+    } catch {
+      // file-loaded or onProperty will catch it
+    }
+
     this.emit(true);
   }
 
@@ -248,10 +309,11 @@ class MpvController {
   }
 
   async finishFileLoad() {
+    if (this.fileLoadFinished) return;
+    this.fileLoadFinished = true;
+
     const resume = this.resumeAfterLoad;
     this.resumeAfterLoad = null;
-    this.state.buffering = true;
-    this.emit(true);
 
     try {
       if (resume != null && resume > 0) {
@@ -275,11 +337,17 @@ class MpvController {
 
     switch (name) {
       case 'time-pos':
-        if (typeof value === 'number' && Number.isFinite(value)) s.timePos = value;
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          s.timePos = value;
+          if (!this.fileLoadFinished && value > 0) void this.finishFileLoad();
+        }
         immediate = false;
         break;
       case 'duration':
-        if (typeof value === 'number' && Number.isFinite(value)) s.duration = value;
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          s.duration = value;
+          if (!this.fileLoadFinished && value > 0) void this.finishFileLoad();
+        }
         break;
       case 'pause':
         s.pause = Boolean(value);
@@ -333,6 +401,10 @@ class MpvController {
 
   setProperty(name, value) {
     return this.command(['set_property', name, value]);
+  }
+
+  getProperty(name) {
+    return this.command(['get_property', name]);
   }
 
   async switchAudioTrack(id) {
@@ -425,6 +497,7 @@ class MpvController {
     this.socket = null;
     this.process = null;
     this.resumeAfterLoad = null;
+    this.currentHwnd = null;
   }
 }
 

@@ -45,7 +45,7 @@ async function probeDuration(videoPath: string): Promise<number> {
   return 0;
 }
 
-export function toBasicFile(file: ScannedFile, category: 'movie' | 'tv'): LocalFile {
+export function toBasicFile(file: ScannedFile, category: 'movie' | 'tv' | 'anime'): LocalFile {
   const cachedDuration = getCachedDuration(file.path) ?? 0;
   return applyMediaOverride({
     ...file,
@@ -57,26 +57,26 @@ export function toBasicFile(file: ScannedFile, category: 'movie' | 'tv'): LocalF
   });
 }
 
-/** Movies: all files. TV: all episodes needing enrich (capped) + priority paths. */
+/** Movies: all files. TV / Anime: all episodes needing enrich (capped) + priority paths. */
 export function buildOptimizedEnrichQueue(
-  items: { file: ScannedFile; category: 'movie' | 'tv' }[],
+  items: { file: ScannedFile; category: 'movie' | 'tv' | 'anime' }[],
   priorityPaths: Set<string> = new Set(),
   hydratedFiles: LocalFile[] = [],
 ) {
   const hydrated = new Map(hydratedFiles.map((f) => [f.path, f]));
 
   const movies = items.filter((i) => i.category === 'movie' && needsEnrich(hydrated.get(i.file.path)));
-  const tvPriority = items.filter(
-    (i) => i.category === 'tv' && priorityPaths.has(i.file.path) && needsEnrich(hydrated.get(i.file.path)),
+  const seriesPriority = items.filter(
+    (i) => i.category !== 'movie' && priorityPaths.has(i.file.path) && needsEnrich(hydrated.get(i.file.path)),
   );
 
-  const tvAll = items.filter(
-    (i) => i.category === 'tv' && !priorityPaths.has(i.file.path) && needsEnrich(hydrated.get(i.file.path)),
+  const seriesAll = items.filter(
+    (i) => i.category !== 'movie' && !priorityPaths.has(i.file.path) && needsEnrich(hydrated.get(i.file.path)),
   );
 
   const seen = new Set<string>();
   const result: typeof items = [];
-  for (const item of [...movies, ...tvPriority, ...tvAll.slice(0, TV_ENRICH_SCAN_CAP)]) {
+  for (const item of [...movies, ...seriesPriority, ...seriesAll.slice(0, TV_ENRICH_SCAN_CAP)]) {
     if (seen.has(item.file.path)) continue;
     seen.add(item.file.path);
     result.push(item);
@@ -84,7 +84,7 @@ export function buildOptimizedEnrichQueue(
   return result;
 }
 
-async function enrichOne(file: ScannedFile, category: 'movie' | 'tv'): Promise<LocalFile | null> {
+async function enrichOne(file: ScannedFile, category: 'movie' | 'tv' | 'anime'): Promise<LocalFile | null> {
   if (isEnrichCancelled(file.path)) return null;
 
   const meta = resolveFileMeta(file, category);
@@ -128,7 +128,7 @@ function toScannedFile(file: LocalFile): ScannedFile {
 
 /** Fill in durations/thumbnails in the background without blocking the UI. */
 export async function enrichLibraryInBackground(
-  items: { file: ScannedFile; category: 'movie' | 'tv' }[],
+  items: { file: ScannedFile; category: 'movie' | 'tv' | 'anime' }[],
   onBatch: (enriched: LocalFile[]) => void,
 ): Promise<void> {
   const batch: LocalFile[] = [];

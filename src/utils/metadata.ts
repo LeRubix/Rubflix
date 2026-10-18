@@ -222,12 +222,13 @@ export function getEpisodeDisplayTitle(
 /** Instant local metadata, no network. Used during library scan. */
 export function getLocalMeta(
   filename: string,
-  category?: 'movie' | 'tv',
+  category?: 'movie' | 'tv' | 'anime',
   filePath?: string,
 ): MovieMeta {
   const parseSource = filePath ? basenameFromPath(filePath) : filename;
+  const isSeriesOrAnime = (category === 'tv' || category === 'anime') && isEpisodeFilename(parseSource);
   const { title, year } =
-    category === 'tv' && isEpisodeFilename(parseSource)
+    isSeriesOrAnime
       ? (() => {
           const ep = parseEpisodeFilename(parseSource);
           return { title: ep.episodeTitle, year: ep.year ?? '' };
@@ -239,7 +240,7 @@ export function getLocalMeta(
     poster: null,
     description: 'A video file from your local library.',
     year,
-    genre: category === 'tv' ? 'Series' : 'Local Media',
+    genre: category === 'anime' ? 'Anime' : category === 'tv' ? 'Series' : 'Local Media',
   };
 }
 
@@ -275,7 +276,7 @@ export function pickPreferredTitle(fromNfo: string, fromFile: string): string {
 function parseNfoMeta(
   nfo: string,
   fallbackTitle: string,
-  category?: 'movie' | 'tv',
+  category?: 'movie' | 'tv' | 'anime',
   filePath?: string,
 ): MovieMeta {
   const parseSource = filePath ? basenameFromPath(filePath) : fallbackTitle;
@@ -303,7 +304,7 @@ function parseNfoMeta(
 
 export function resolveFileMeta(
   file: { name: string; path?: string; localNfoContent?: string | null },
-  category?: 'movie' | 'tv',
+  category?: 'movie' | 'tv' | 'anime',
 ): MovieMeta {
   if (file.localNfoContent) {
     return parseNfoMeta(file.localNfoContent, file.name, category, file.path);
@@ -329,7 +330,7 @@ export async function fetchMetadata(filename: string): Promise<MovieMeta> {
       };
     }
   } catch (error) {
-    console.error('Failed to fetch metadata for', title);
+    console.error('Failed to fetch metadata for', title, error);
   }
 
   return {

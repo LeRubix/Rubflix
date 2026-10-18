@@ -1,18 +1,32 @@
+export function isSeasonFolderName(folder?: string): boolean {
+  if (!folder) return false;
+  const f = folder.trim().toLowerCase();
+  return (
+    /^(season\s*\d+|s\d+|specials?|extras?|ovas?|part\s*\d+|cour\s*\d+)$/i.test(f) ||
+    /^(season|s)\s*\d+/i.test(f) ||
+    Boolean(parseSeasonFromText(f))
+  );
+}
+
 /** Season folder label for grouping episodes in the detail modal. */
 export function getSeasonGroupKey(relativePath?: string): string {
   if (!relativePath) return 'Episodes';
-  const parts = relativePath.split('/').filter(Boolean);
-  if (parts.length < 2) return 'Episodes';
+  const parts = relativePath.replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length <= 1) return 'Episodes';
+  if (parts.length === 2) {
+    return isSeasonFolderName(parts[0]) ? parts[0] : 'Episodes';
+  }
   // Immediate parent folder of the file (Season 5, S05, etc.)
   return parts[parts.length - 2];
 }
 
-function parseSeasonFromText(text: string): number | null {
+export function parseSeasonFromText(text: string): number | null {
   const patterns = [
     /\bseason\s*(\d+)\b/i,
     /\bs(\d{1,2})e(\d{1,2})\b/i,
     /(?:^|[/\\])s(\d{1,2})(?:[/\\]|$)/i,
     /(?:^|[/\\])season\s*(\d+)(?:[/\\]|$)/i,
+    /\b(\d{1,2})(?:st|nd|rd|th)\s*season\b/i,
   ];
   for (const pattern of patterns) {
     const m = text.match(pattern);
@@ -21,7 +35,7 @@ function parseSeasonFromText(text: string): number | null {
   return null;
 }
 
-function parseEpisodeFromText(text: string): number | null {
+export function parseEpisodeFromText(text: string): number | null {
   const withoutExt = text.replace(/\.[^/.]+$/, '');
 
   const patterns: RegExp[] = [
@@ -31,6 +45,9 @@ function parseEpisodeFromText(text: string): number | null {
     /\bep(?:isode)?\.?\s*(\d+)\b/i,
     /\bs\d{1,2}e(\d{1,2})\b/i,
     /\b(\d{1,2})x(\d{1,2})\b/i,
+    /(?:^|\s)[-–—]\s*(\d{1,4})(?:v\d+)?(?:\s*\(|\s*\[|\s+\d{3,4}p|\s*$)/i,
+    /\b(?:e|ep)\.?\s*(\d{1,4})(?:v\d+)?(?:\b|_|\[|\()/i,
+    /(?:^|[ _\-[])(\d{1,4})(?:v\d+)?(?:\s*\(1080p|\s*\(720p|\s*\[1080p|\s*\[720p)/i,
   ];
 
   for (const pattern of patterns) {
@@ -68,8 +85,8 @@ export function resolveEpisodeNumbers(
   const season = parseSeasonFromText(combined);
   const episode = parseEpisodeFromText(name) ?? parseEpisodeFromText(combined);
 
-  if (season != null && episode != null) {
-    return { season, episode };
+  if (episode != null) {
+    return { season: season ?? 1, episode };
   }
 
   return null;

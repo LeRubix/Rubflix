@@ -8,6 +8,7 @@ export interface PlayerKeyboardHandlers {
   onFullscreen: () => void;
   onEscape: () => void;
   onSubtitlesToggle: () => void;
+  onPrev?: () => void;
   onNext?: () => void;
   onActivity: () => void;
 }
@@ -60,6 +61,11 @@ export function usePlayerKeyboard(handlers: PlayerKeyboardHandlers) {
         case 'c':
         case 'C':
           h.onSubtitlesToggle();
+          break;
+        case 'p':
+        case 'P':
+          if (e.shiftKey && h.onPrev) h.onPrev();
+          else handled = false;
           break;
         case 'n':
         case 'N':

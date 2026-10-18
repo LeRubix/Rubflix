@@ -1,6 +1,6 @@
 import type { LocalFile } from '../components/NetflixUI';
 import { applyMediaOverride, isTmdbDisabled } from './mediaOverrides';
-import { getSeasonGroupKey } from './episodeParsing';
+import { getSeasonGroupKey, resolveEpisodeNumbers, isSeasonFolderName } from './episodeParsing';
 import { parseSeriesFolderName } from './metadata';
 import { getCachedForVideo } from './tmdb';
 
@@ -12,8 +12,44 @@ const JUNK_GENRES = new Set(['Local Media', 'Movie', 'Series', '']);
 
 export function getSeriesRoot(relativePath?: string): string | null {
   if (!relativePath) return null;
-  const parts = relativePath.split('/');
-  return parts.length > 1 ? parts[0] : null;
+  const parts = relativePath.replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  if (isSeasonFolderName(parts[0]) && parts.length > 1) {
+    return null;
+  }
+  return parts[0];
+}
+
+export function getSeriesRootFromFile(f: LocalFile): string | null {
+  // 1. Try relativePath segments
+  if (f.relativePath) {
+    const fromRel = getSeriesRoot(f.relativePath);
+    if (fromRel) return fromRel;
+  }
+
+  // 2. Derive from physical path
+  if (f.path) {
+    const normalized = f.path.replace(/\\/g, '/');
+    const segs = normalized.split('/').filter(Boolean);
+    if (segs.length >= 2) {
+      const parent = segs[segs.length - 2];
+      if (isSeasonFolderName(parent)) {
+        if (segs.length >= 3) {
+          return segs[segs.length - 3];
+        }
+      } else {
+        return parent;
+      }
+    }
+  }
+
+  // 3. Fallback to folderName if available and not a season folder
+  if (f.folderName && !isSeasonFolderName(f.folderName)) {
+    return f.folderName;
+  }
+
+  return null;
 }
 
 function bestThumbnail(episodes: LocalFile[]): string | undefined {
@@ -33,24 +69,37 @@ export function buildSeriesFolders(shows: LocalFile[]): LocalFile[] {
   const rootFolders = new Map<string, LocalFile[]>();
 
   shows.forEach((f) => {
-    const root = getSeriesRoot(f.relativePath);
+    const root = getSeriesRootFromFile(f) || getSeriesRoot(f.relativePath);
     if (!root) return;
     if (!rootFolders.has(root)) rootFolders.set(root, []);
     rootFolders.get(root)!.push(f);
   });
 
   return Array.from(rootFolders.entries()).map(([root, fList]) => {
-    const sorted = [...fList].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true }),
-    );
+    const sorted = [...fList].sort((a, b) => {
+      const epA = resolveEpisodeNumbers(a.name, a.relativePath);
+      const epB = resolveEpisodeNumbers(b.name, b.relativePath);
+      if (epA && epB) {
+        if (epA.season !== epB.season) return epA.season - epB.season;
+        if (epA.episode !== epB.episode) return epA.episode - epB.episode;
+      } else if (epA && !epB) {
+        return -1;
+      } else if (!epA && epB) {
+        return 1;
+      }
+      const relA = a.relativePath || a.name;
+      const relB = b.relativePath || b.name;
+      return relA.localeCompare(relB, undefined, { numeric: true, sensitivity: 'base' });
+    });
     const fanart = sorted.find((ep) => ep.localFanart)?.localFanart ?? null;
     const poster = sorted.find((ep) => ep.localPoster)?.localPoster ?? null;
     const { title: seriesTitle, year: seriesYear } = parseSeriesFolderName(root);
+    const hasAnime = sorted.some((ep) => ep.category === 'anime');
     const folder: LocalFile = {
       name: root,
       path: `folder://${root}`,
       isFolder: true,
-      category: 'tv',
+      category: hasAnime ? 'anime' : 'tv',
       folderFiles: sorted,
       thumbnail: bestThumbnail(sorted),
       localFanart: fanart,
@@ -89,7 +138,7 @@ export function buildContinueWatchingSeries(
   const byRoot = new Map<string, LocalFile>();
 
   for (const ep of inProgress) {
-    const root = getSeriesRoot(ep.relativePath);
+    const root = getSeriesRootFromFile(ep) || getSeriesRoot(ep.relativePath);
     if (!root) continue;
     const existing = byRoot.get(root);
     const existingPos = existing ? (progresses[existing.path] ?? 0) : -1;
@@ -136,7 +185,7 @@ export function buildTop10(
 
   const seriesCounts = new Map<string, number>();
   for (const ep of shows) {
-    const root = getSeriesRoot(ep.relativePath);
+    const root = getSeriesRootFromFile(ep) || getSeriesRoot(ep.relativePath);
     if (!root) continue;
     const count = playCounts[ep.path] ?? 0;
     if (count <= 0) continue;
@@ -228,7 +277,7 @@ export function resolveShowDetailTarget(
   files: LocalFile[],
   file: LocalFile,
 ): { show: LocalFile; seasonKey: string } | null {
-  if (file.isFolder || file.category !== 'tv') return null;
+  if (file.isFolder || (file.category !== 'tv' && file.category !== 'anime')) return null;
   const targetKey = normPath(file.path);
 
   for (const f of files) {
@@ -240,7 +289,7 @@ export function resolveShowDetailTarget(
     }
   }
 
-  const shows = files.filter((f) => f.category === 'tv' && !f.isFolder);
+  const shows = files.filter((f) => (f.category === 'tv' || f.category === 'anime') && !f.isFolder);
   const folders = buildSeriesFolders(shows);
   for (const show of folders) {
     for (const ep of show.folderFiles ?? []) {

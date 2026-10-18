@@ -12,22 +12,26 @@ export interface LibraryDiff {
   kept: LocalFile[];
 }
 
-export async function scanAllFolders(settings: Pick<Settings, 'movieFolders' | 'tvFolders'>) {
+export async function scanAllFolders(settings: Pick<Settings, 'movieFolders' | 'tvFolders' | 'animeFolders'>) {
   const api = window.electronAPI;
-  const [movieResults, tvResults] = await Promise.all([
+  const animeFolders = settings.animeFolders ?? [];
+  const [movieResults, tvResults, animeResults] = await Promise.all([
     Promise.all(settings.movieFolders.map((f) => api.scanDirectory(f))),
     Promise.all(settings.tvFolders.map((f) => api.scanDirectory(f))),
+    Promise.all(animeFolders.map((f) => api.scanDirectory(f))),
   ]);
 
   let basicFiles: LocalFile[] = [
     ...movieResults.flat().map((f) => toBasicFile(f, 'movie')),
     ...tvResults.flat().map((f) => toBasicFile(f, 'tv')),
+    ...animeResults.flat().map((f) => toBasicFile(f, 'anime')),
   ];
   basicFiles = await hydrateFilesFromCache(basicFiles);
 
-  const enrichQueue: { file: ScannedFile; category: 'movie' | 'tv' }[] = [
+  const enrichQueue: { file: ScannedFile; category: 'movie' | 'tv' | 'anime' }[] = [
     ...movieResults.flat().map((file) => ({ file, category: 'movie' as const })),
     ...tvResults.flat().map((file) => ({ file, category: 'tv' as const })),
+    ...animeResults.flat().map((file) => ({ file, category: 'anime' as const })),
   ];
 
   return { basicFiles, enrichQueue };

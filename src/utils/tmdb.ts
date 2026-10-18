@@ -4,6 +4,7 @@ import { basenameFromPath, cleanTitle, parseFilenameMeta, parseSeriesFolderName 
 import { getMediaOverride, isTmdbDisabled } from './mediaOverrides';
 import { runWithConcurrency } from './concurrency';
 import { getActiveTmdbApiKey } from './settings';
+import { searchAniList, fetchAniListById, getAniListCache, cleanAnimeQuery } from './anilist';
 
 const CACHE_KEY = 'tmdb_metadata_cache_v6';
 const EP_CACHE_KEY = 'tmdb_episodes_cache_v3';
@@ -31,6 +32,8 @@ export interface TMDBResult {
   year: string | null;
   tvId?: number;
   movieId?: number;
+  anilistId?: number;
+  provider?: 'tmdb' | 'anilist';
   director?: string;
   creators?: string[];
   cast?: string[];
@@ -241,7 +244,27 @@ export function getCachedLookup(opts: TMDBLookupOptions): TMDBResult | null | un
   return undefined;
 }
 
+export function isAniListVideo(video: LocalFile): boolean {
+  const override = getMediaOverride(video.path);
+  if (override?.provider === 'anilist' || Boolean(override?.anilistId)) return true;
+  if (override?.provider === 'tmdb' || Boolean(override?.tmdbId)) return false;
+  if (video.category === 'anime') return true;
+  const text = `${video.name} ${video.relativePath || ''}`;
+  return /\[(?:SubsPlease|Erai-raws|Judas|HorribleSubs|ASW|Commie|PuyaSubs|Golumpa|SallySubs)\]/i.test(text);
+}
+
 export function getCachedForVideo(video: LocalFile): TMDBResult | null | undefined {
+  if (isAniListVideo(video)) {
+    const override = getMediaOverride(video.path);
+    const parsedAniListId = override?.anilistId ? Number.parseInt(override.anilistId, 10) : NaN;
+    const cache = getAniListCache();
+    if (Number.isFinite(parsedAniListId) && parsedAniListId > 0) {
+      return cache[`id:${parsedAniListId}`];
+    }
+    const lookup = getTMDBLookupOptions(video);
+    const clean = cleanAnimeQuery(lookup.title);
+    return cache[`search:${clean.toLowerCase()}`];
+  }
   return getCachedLookup(getTMDBLookupOptions(video));
 }
 
@@ -256,12 +279,24 @@ export function getCached(title: string): TMDBResult | null {
 
 export async function getTMDBMetadataForVideo(video: LocalFile): Promise<TMDBResult | null> {
   if (isTmdbDisabled(video)) return null;
+  if (isAniListVideo(video)) {
+    const override = getMediaOverride(video.path);
+    const parsedAniListId = override?.anilistId ? Number.parseInt(override.anilistId, 10) : NaN;
+    if (Number.isFinite(parsedAniListId) && parsedAniListId > 0) {
+      return fetchAniListById(parsedAniListId);
+    }
+    const lookup = getTMDBLookupOptions(video);
+    return searchAniList(lookup.title);
+  }
   return getTMDBMetadata(getTMDBLookupOptions(video));
 }
 
 /** Lazy details fetch for modal, search first, then details + credits. */
 export async function fetchTMDBDetailsForVideo(video: LocalFile): Promise<TMDBResult | null> {
   if (isTmdbDisabled(video)) return null;
+  if (isAniListVideo(video)) {
+    return getTMDBMetadataForVideo(video);
+  }
 
   const lookup = getTMDBLookupOptions(video);
   const key = cacheKey(lookup);

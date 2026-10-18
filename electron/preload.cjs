@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   playerStart: (session) => ipcRenderer.invoke('player-start', session),
   onPlayerExited: (callback) => subscribe('player-exited', callback),
   onPlayerRequestNext: (callback) => subscribe('player-request-next', callback),
+  onPlayerRequestPrev: (callback) => subscribe('player-request-prev', callback),
 
   // Player controls window
   playerGetSession: () => ipcRenderer.invoke('player-get-session'),
@@ -44,7 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   playerCommand: (action, value) => ipcRenderer.invoke('player-command', action, value),
   playerToggleFullscreen: () => ipcRenderer.invoke('player-toggle-fullscreen'),
   playerSetFullscreen: (fullscreen) => ipcRenderer.invoke('player-set-fullscreen', fullscreen),
-  playerRequestNext: () => ipcRenderer.invoke('player-request-next'),
+  playerRequestNext: (targetPath) => ipcRenderer.invoke('player-request-next', targetPath),
+  playerRequestPrev: (targetPath) => ipcRenderer.invoke('player-request-prev', targetPath),
   playerExit: (payload) => ipcRenderer.invoke('player-exit', payload),
   onPlayerState: (callback) => subscribe('player-state', callback),
   onPlayerFullscreen: (callback) => subscribe('player-fullscreen', callback),

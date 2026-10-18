@@ -318,6 +318,15 @@ async function walkDirAsync(dir, filelist = []) {
   return filelist;
 }
 
+function isSeasonFolderName(segment) {
+  if (!segment) return false;
+  const s = segment.trim();
+  return (
+    /^(season\s*\d+|s\d+|specials?|extras?|ovas?|part\s*\d+|cour\s*\d+)$/i.test(s) ||
+    /^(season|s)\s*\d+/i.test(s)
+  );
+}
+
 // IPC Handler to scan directory
 ipcMain.handle('scan-directory', async (event, dirPath) => {
   try {
@@ -366,7 +375,10 @@ ipcMain.handle('scan-directory', async (event, dirPath) => {
       
       const scanRootName = path.basename(fullPath);
       const rel = path.relative(fullPath, filepath).replace(/\\/g, '/');
-      const relativePath = rel.includes('/') ? rel : `${scanRootName}/${rel}`;
+      const firstSegment = rel.includes('/') ? rel.split('/')[0] : '';
+      const relativePath = !rel.includes('/') || isSeasonFolderName(firstSegment)
+        ? `${scanRootName}/${rel}`
+        : rel;
 
       return {
         name: cleanName || file, // Fallback to raw file if regex wipes it completely
@@ -501,9 +513,16 @@ ipcMain.handle('player-set-fullscreen', async (event, fullscreen) => {
   return getPlayerWindows().setFullscreen(Boolean(fullscreen));
 });
 
-ipcMain.handle('player-request-next', async () => {
+ipcMain.handle('player-request-next', async (event, targetPath) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('player-request-next', playerSession?.path ?? null);
+    mainWindow.webContents.send('player-request-next', targetPath || playerSession?.path || null);
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('player-request-prev', async (event, targetPath) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('player-request-prev', targetPath || playerSession?.path || null);
   }
   return { ok: true };
 });

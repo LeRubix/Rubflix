@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowLeft, Play, Pause, RotateCcw, RotateCw, Volume1, Volume2, VolumeX,
-  Maximize, Minimize, SkipForward, Captions, Gauge,
+  Maximize, Minimize, SkipBack, SkipForward, Captions, Gauge,
 } from 'lucide-react';
 import { AudioSubtitlePanel, SpeedPanel } from './TrackMenu';
 import { formatTime, type SubtitleStyle } from '../utils/subtitles';
@@ -158,7 +158,7 @@ function IconButton({ label, onClick, children, active }: { label: string; onCli
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`relative flex items-center justify-center w-11 h-11 text-white transition-transform duration-150 hover:scale-125 focus:outline-none ${active ? 'scale-125' : ''}`}
+      className={`relative flex items-center justify-center w-11 h-11 text-white cursor-pointer transition-transform duration-150 hover:scale-125 focus:outline-none ${active ? 'scale-125' : ''}`}
     >
       {children}
     </button>
@@ -188,7 +188,8 @@ interface PlayerControlsProps {
   subtitleTracks: MpvTrack[];
   selectedAudioId: number | null;
   selectedSubtitleId: number | null;
-  hasNext: boolean;
+  hasPrev?: boolean;
+  hasNext?: boolean;
   onPanelChange: (panel: PlayerPanel) => void;
   onBack: () => void;
   onTogglePause: () => void;
@@ -203,17 +204,18 @@ interface PlayerControlsProps {
   subtitleStyle: SubtitleStyle;
   onSubtitleStyleChange: (style: SubtitleStyle) => void;
   onFullscreen: () => void;
-  onNext: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   onScrubbingChange: (scrubbing: boolean) => void;
 }
 
 export function PlayerControls(props: PlayerControlsProps) {
   const {
     title, subtitle, state, volume, muted, visible, isFullscreen, openPanel,
-    audioTracks, subtitleTracks, selectedAudioId, selectedSubtitleId, hasNext,
+    audioTracks, subtitleTracks, selectedAudioId, selectedSubtitleId, hasPrev, hasNext,
     onPanelChange, onBack, onTogglePause, onSeek, onSkip, onVolumeChange, onMute,
     onSpeedChange, onSelectAudio, onSelectSubtitle, onImportSubtitle,
-    subtitleStyle, onSubtitleStyleChange, onFullscreen, onNext,
+    subtitleStyle, onSubtitleStyleChange, onFullscreen, onPrev, onNext,
     onScrubbingChange,
   } = props;
 
@@ -292,7 +294,13 @@ export function PlayerControls(props: PlayerControlsProps) {
             {subtitle && <span className="text-white/70 text-lg ml-3">{subtitle}</span>}
           </div>
 
-          {hasNext && (
+          {hasPrev && onPrev && (
+            <IconButton label="Previous episode (Shift+P)" onClick={onPrev}>
+              <SkipBack className="w-9 h-9 fill-white" />
+            </IconButton>
+          )}
+
+          {hasNext && onNext && (
             <IconButton label="Next episode (Shift+N)" onClick={onNext}>
               <SkipForward className="w-9 h-9 fill-white" />
             </IconButton>

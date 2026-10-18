@@ -71,24 +71,19 @@ class PlayerWindows {
 
   raisePlayerAboveMain() {
     if (!this.isOpen()) return;
-    // Keep the video/controls HWND above the library window while dragging or resizing.
-    this.playerWindow.moveTop();
+    // Window is owned by mainWindow so OS maintains proper relative z-order
   }
 
-  /** Re-stack player after main window steals focus (common when re-activating the app). */
+  /** Re-stack player when main window gains focus. */
   restorePlayerStack() {
     if (!this.isOpen() || this.mainWindow.isDestroyed()) return;
     this.syncBounds();
-    this.raisePlayerAboveMain();
     this.playerWindow.focus();
   }
 
   applyPlayerFullscreen(isFullscreen) {
     if (!this.isOpen()) return;
     if (isFullscreen) {
-      // The player window receives focus when pausing/scrubbing. If only mainWindow
-      // is fullscreen, Windows treats the focused player as windowed and shows the
-      // taskbar, so both windows must enter fullscreen together.
       if (!this.playerWindow.isFullScreen()) {
         this.playerWindow.setFullScreen(true);
       }
@@ -98,7 +93,6 @@ class PlayerWindows {
     } else {
       this.playerWindow.setBounds(this.getTargetBounds());
     }
-    this.raisePlayerAboveMain();
     this.playerWindow.webContents.send('player-fullscreen', isFullscreen);
   }
 
@@ -115,26 +109,16 @@ class PlayerWindows {
     if (!this.isOpen()) return;
     this.syncBounds();
     this.playerWindow.show();
-    this.raisePlayerAboveMain();
     this.playerWindow.focus();
   }
 
-  /**
-   * Without an owner relationship, raising mainWindow (clicking its title strip,
-   * alt-tabbing to it) would bury the player behind the library UI.
-   */
   handleMainFocus() {
     if (!this.isOpen()) return;
     this.restorePlayerStack();
-    // Focus lands on main first when clicking the taskbar; defer so we run after WM finishes.
-    setImmediate(() => this.restorePlayerStack());
   }
 
   handlePlayerBlur() {
-    if (!this.isOpen() || this.mainWindow.isDestroyed()) return;
-    if (this.mainWindow.isFocused()) {
-      setImmediate(() => this.restorePlayerStack());
-    }
+    // Do not force focus back when user switches to other applications
   }
 
   open(options = {}) {
@@ -147,6 +131,8 @@ class PlayerWindows {
 
     this.playerWindow = new BrowserWindow({
       ...this.getTargetBounds(),
+      parent: this.mainWindow,
+      modal: false,
       title,
       frame: false,
       transparent: true,
