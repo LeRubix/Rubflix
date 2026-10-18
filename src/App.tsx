@@ -66,6 +66,7 @@ import { cancelEnrich } from './utils/enrichCancel';
 import { releaseVideoForPath } from './utils/thumbnail';
 import { appendWatchHistory, episodeCodeFromFile } from './utils/watchHistory';
 import { OnlineWatchView } from './components/OnlineWatchView';
+import kudLogo from './assets/logo.png';
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
@@ -826,7 +827,7 @@ export default function App() {
             >
               <div className="flex items-center gap-8" style={{ WebkitAppRegion: 'no-drag' } as any}>
                 <div className="flex items-center gap-2.5 pointer-events-auto">
-                  <img src="/icon.png" alt="Logo" className="w-7 h-7 rounded-md object-cover shadow-sm drop-shadow-md" />
+                  <img src={kudLogo} alt="Logo" className="w-7 h-7 rounded-md object-cover shadow-sm drop-shadow-md" />
                   <h1 className="text-accent font-black text-2xl tracking-tighter shadow-black drop-shadow-md">{settings.appName}</h1>
                 </div>
                 <ul className="hidden md:flex gap-5 text-sm font-semibold text-gray-200 pointer-events-auto">
