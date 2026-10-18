@@ -14,11 +14,11 @@ A lightweight, 100% offline desktop media player that turns any video folder int
 
 <br/>
 
-<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.6/Kudflix.Setup.1.4.6.exe">
+<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.7/Kudflix.Setup.1.4.7.exe">
   <img src="https://img.shields.io/badge/⬇%20Download-Installer%20(.exe)-E50914?style=for-the-badge&logo=windows" height="40" />
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.6/Kudflix-1.4.6-win.zip">
+<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.7/Kudflix-1.4.7-win.zip">
   <img src="https://img.shields.io/badge/⚡%20Portable%20Edition-No%20Install%20(.zip)-gray?style=for-the-badge" height="40" />
 </a>
 
@@ -86,10 +86,10 @@ Broadcasting what you're watching straight to your Discord profile:
 ## 📥 Installation
 
 ### Windows Installer (Recommended)
-Download and run [**Kudflix Setup 1.4.6.exe**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.6/Kudflix.Setup.1.4.6.exe). Desktop and Start Menu shortcuts will be created automatically.
+Download and run [**Kudflix Setup 1.4.7.exe**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.7/Kudflix.Setup.1.4.7.exe). Desktop and Start Menu shortcuts will be created automatically.
 
 ### Portable Mode (Run from USB / External Drive)
-Download [**Kudflix-1.4.6-win.zip**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.6/Kudflix-1.4.6-win.zip), extract it anywhere, and launch `Kudflix.exe`. No installation, registry entries, or admin privileges needed.
+Download [**Kudflix-1.4.7-win.zip**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.7/Kudflix-1.4.7-win.zip), extract it anywhere, and launch `Kudflix.exe`. No installation, registry entries, or admin privileges needed.
 
 ### Windows Package Manager (`winget`)
 ```cmd
