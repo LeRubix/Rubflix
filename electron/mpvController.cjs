@@ -27,6 +27,13 @@ function getMpvExecutablePath() {
   return fs.existsSync(bundled) ? bundled : 'mpv';
 }
 
+function getYtDlpExecutablePath() {
+  const bundled = app.isPackaged
+    ? path.join(process.resourcesPath, 'mpv', 'yt-dlp.exe')
+    : path.join(__dirname, 'bin', 'mpv', 'yt-dlp.exe');
+  return fs.existsSync(bundled) ? bundled : null;
+}
+
 function initialState() {
   return {
     timePos: 0,
@@ -177,6 +184,11 @@ class MpvController {
       `--input-ipc-server=${pipeName}`,
       `--volume=${Math.round(options.volume ?? 100)}`,
     ];
+
+    const ytDlpPath = getYtDlpExecutablePath();
+    if (ytDlpPath) {
+      args.push(`--script-opts=ytdl_hook-ytdl_path=${ytDlpPath}`);
+    }
 
     if (options.mute) {
       args.push('--mute=yes');

@@ -7,6 +7,7 @@ const { PlayerWindows, TITLE_STRIP_HEIGHT } = require('./playerWindows.cjs');
 const { LibraryWatcher } = require('./libraryWatcher.cjs');
 const appIcon = require('./appIcon.cjs');
 const { discordRpc } = require('./discordRpc.cjs');
+const { searchOnline } = require('./onlineSearch.cjs');
 
 const isDev = !app.isPackaged;
 
@@ -545,4 +546,8 @@ ipcMain.handle('discord-rpc-set-client-id', (event, clientId) => {
 ipcMain.handle('discord-rpc-set-activity-style', (event, style) => {
   discordRpc.setActivityStyle(style);
   return { ok: true };
+});
+
+ipcMain.handle('online-search', async (_event, query) => {
+  return searchOnline(query);
 });

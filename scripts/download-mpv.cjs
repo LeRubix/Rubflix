@@ -177,12 +177,22 @@ async function main() {
     fs.copyFileSync(ffprobeExe, path.join(TARGET_DIR, 'ffprobe.exe'));
   }
 
-  fs.rmSync(TEMP_ARCHIVE, { force: true });
-  fs.rmSync(extractDir, { recursive: true, force: true });
+  const ytDlpDest = path.join(TARGET_DIR, 'yt-dlp.exe');
+  if (!fs.existsSync(ytDlpDest)) {
+    console.log('Downloading yt-dlp.exe...');
+    try {
+      await download('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', ytDlpDest);
+      console.log('yt-dlp installed to', ytDlpDest);
+    } catch (e) {
+      console.warn('Failed to download yt-dlp:', e.message);
+    }
+  }
 
   fs.writeFileSync(path.join(TARGET_DIR, 'LICENSE.txt'), `mpv is licensed under LGPL-2.1 or later.
 Source code: https://github.com/mpv-player/mpv
 Windows builds: https://github.com/shinchiro/mpv-winbuild-cmake/releases
+yt-dlp is licensed under Unlicense.
+Source code: https://github.com/yt-dlp/yt-dlp
 `);
 
   console.log('mpv installed to', TARGET_DIR);

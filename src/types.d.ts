@@ -66,6 +66,17 @@ declare global {
     label: string;
   }
 
+  interface OnlineVideo {
+    id: string;
+    url: string;
+    title: string;
+    channel: string;
+    duration: number;
+    thumbnail: string | null;
+    viewCount: number | null;
+    description: string;
+  }
+
   interface SubtitleStyleOptions {
     scale?: number;
     fontSize?: number;
@@ -113,6 +124,7 @@ declare global {
       setDiscordRpcEnabled: (enabled: boolean) => Promise<{ ok: boolean }>;
       setDiscordRpcClientId: (clientId: string) => Promise<{ ok: boolean }>;
       setDiscordRpcActivityStyle?: (style: 'media' | 'watching' | 'playing') => Promise<{ ok: boolean }>;
+      searchOnline?: (query: string) => Promise<{ ok: boolean; results?: OnlineVideo[]; error?: string }>;
 
       playerStart: (session: PlayerSession) => Promise<{ ok: boolean }>;
       onPlayerExited: (callback: (payload: PlayerExitPayload | null) => void) => () => void;

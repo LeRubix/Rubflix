@@ -65,11 +65,12 @@ import { WatchHistoryOverlay } from './components/WatchHistoryOverlay';
 import { cancelEnrich } from './utils/enrichCancel';
 import { releaseVideoForPath } from './utils/thumbnail';
 import { appendWatchHistory, episodeCodeFromFile } from './utils/watchHistory';
+import { OnlineWatchView } from './components/OnlineWatchView';
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<string | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'home' | 'tv' | 'movies'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'tv' | 'movies' | 'online'>('home');
 
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -519,6 +520,38 @@ export default function App() {
     window.electronAPI.playerStart(session);
   };
 
+  const handlePlayOnlineVideo = (video: OnlineVideo) => {
+    const session: PlayerSession = {
+      path: video.url,
+      title: video.title,
+      subtitle: video.channel || 'YouTube',
+      thumbnail: video.thumbnail || undefined,
+      profileId: activeProfile || '',
+      startTime: 0,
+      prev: null,
+      next: null,
+      appName: settings.appName,
+    };
+
+    if (!window.electronAPI?.playerStart) return;
+
+    const onlineFile: LocalFile = {
+      name: video.title,
+      path: video.url,
+      meta: {
+        title: video.title,
+        description: video.description,
+        poster: video.thumbnail || undefined,
+      },
+      thumbnail: video.thumbnail || undefined,
+      duration: video.duration,
+    };
+
+    playingVideoRef.current = onlineFile;
+    setPlayingVideo(onlineFile);
+    window.electronAPI.playerStart(session);
+  };
+
   const handleOpenInfo = useCallback(
     (video: LocalFile) => {
       const resolved = resolveShowDetailTarget(files, video);
@@ -797,6 +830,7 @@ export default function App() {
                   <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('home'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'home' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>Home</li>
                   <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('tv'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'tv' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>TV Shows</li>
                   <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('movies'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'movies' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>Movies</li>
+                  <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('online'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'online' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>Watch Online</li>
                 </ul>
               </div>
             
@@ -864,7 +898,12 @@ export default function App() {
             </div>
           </nav>
 
-      {!hasLibrary ? (
+      {activeTab === 'online' ? (
+        <OnlineWatchView
+          onPlayVideo={handlePlayOnlineVideo}
+          accentColor={settings.accentColor}
+        />
+      ) : !hasLibrary ? (
         <div className="flex-grow flex flex-col items-center justify-center text-center px-4 relative z-10 pt-20">
           <h2 className="text-2xl font-bold mb-2">Set up your library</h2>
           <p className="text-gray-400 mb-6 max-w-md">Choose one or more folders for movies and TV shows. You can pick different folders for each section.</p>

@@ -2,23 +2,24 @@
 
 # 🍿 Kudflix
 
-### *Your local videos. Netflix aesthetics. Zero servers.*
+### *Your local videos & YouTube streams. Netflix aesthetics. Zero servers.*
 
-A lightweight, 100% offline desktop media player that turns any video folder into a personalized streaming experience.
+A lightweight, high-performance desktop media player that combines local offline streaming with an ad-free **Watch Online** section powered by **MPV** and **yt-dlp**.
 
 [![Latest Release](https://img.shields.io/github/v/release/NekoIsUnavailable/Kudflix?style=for-the-badge&color=E50914&logo=github)](https://github.com/NekoIsUnavailable/Kudflix/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows)](https://github.com/NekoIsUnavailable/Kudflix/releases/latest)
-[![Engine](https://img.shields.io/badge/Player-MPV%20Engine-purple?style=for-the-badge)](https://mpv.io)
+[![Player Engine](https://img.shields.io/badge/Player-MPV%20Engine-purple?style=for-the-badge)](https://mpv.io)
+[![Online Streaming](https://img.shields.io/badge/Online-yt--dlp-FF0000?style=for-the-badge&logo=youtube)](https://github.com/yt-dlp/yt-dlp)
 [![License](https://img.shields.io/badge/License-Open%20Source-brightgreen?style=for-the-badge)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Rich%20Presence-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://github.com/NekoIsUnavailable/Kudflix)
 
 <br/>
 
-<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.8/Kudflix.Setup.1.4.8.exe">
+<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.9/Kudflix.Setup.1.4.9.exe">
   <img src="https://img.shields.io/badge/⬇%20Download-Installer%20(.exe)-E50914?style=for-the-badge&logo=windows" height="40" />
 </a>
 &nbsp;&nbsp;
-<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.8/Kudflix-1.4.8-win.zip">
+<a href="https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.9/Kudflix-1.4.9-win.zip">
   <img src="https://img.shields.io/badge/⚡%20Portable%20Edition-No%20Install%20(.zip)-gray?style=for-the-badge" height="40" />
 </a>
 
@@ -34,13 +35,21 @@ A lightweight, 100% offline desktop media player that turns any video folder int
 
 | Media Player | What's Missing? |
 | :--- | :--- |
-| **VLC / MPC-HC** | Plays every file, but looks like software from 2003. No posters, no episode tracking, no streaming UI. |
-| **Plex / Jellyfin** | Great interface, but requires always-on background server daemons, accounts, port forwarding, and transcode overhead. |
-| **Kudflix** | **Zero servers. Zero accounts. Zero setup.** Point it to any folder on your PC or external hard drive and instantly get a Netflix-grade streaming UI with native **MPV** playback. |
+| **VLC / MPC-HC** | Plays every file, but looks like software from 2003. No posters, no episode tracking, no online search, and no streaming UI. |
+| **Plex / Jellyfin** | Great interface, but requires always-on background server daemons, accounts, port forwarding, and heavy transcode overhead. |
+| **YouTube in Browser** | Cluttered with recommendations, algorithm feeds, ads, and high browser CPU/RAM consumption. |
+| **Kudflix** | **Zero servers. Zero accounts. Zero ads.** Point it to any folder on your PC or search YouTube online (like `ytfzf`) and get an instant, beautiful Netflix-grade UI with native **MPV** hardware decoding and full **Discord Rich Presence**. |
 
 ---
 
 ## ⚡ Key Highlights
+
+### 🌐 Watch Online (YouTube Streaming like `ytfzf`)
+Stream YouTube videos directly inside Kudflix without ever opening a browser or creating an account:
+* **Zero API Keys & Zero Quotas:** Search video titles, channels, anime OSTs, and documentaries without rate limits.
+* **Direct Link Streaming:** Paste any `youtube.com` or `youtu.be` link to immediately begin playback.
+* **Quick Category Filters:** Instant one-click categories for **🔥 Trending**, **🎬 Movie Trailers**, **⛩️ Anime Openings**, **🎵 Music**, **🎮 Gaming**, and **🍿 Documentaries**.
+* **Embedded MPV Stream:** High-resolution video and Opus audio streamed directly into Kudflix's native player with hardware acceleration.
 
 ### 🎬 Universal Playback Engine (Powered by MPV)
 No transcoding, no silent audio tracks, and no desynced subtitles.
@@ -52,13 +61,14 @@ No transcoding, no silent audio tracks, and no desynced subtitles.
 Put your files in folders like `Breaking Bad/Season 1/S01E01.mkv`, and Kudflix automatically:
 * Groups them into a single Series card on your Home and TV rows.
 * Generates tabbed Season selectors with episode thumbnails, titles, and runtimes.
-* Remembers your exact resume position per profile and queues the next episode.
+* Remembers your exact resume position per profile and queues the next episode with functional Prev/Next navigation.
 
-### 🎮 Discord Rich Presence
+### 🎮 Enhanced Discord Rich Presence
 Broadcasting what you're watching straight to your Discord profile:
-* Displays current Movie or Series title and Season/Episode tag.
-* Live elapsed and remaining progress bar.
-* *(Easily toggled on/off in Settings).*
+* Displays current Movie, Series, or YouTube video title and channel/season tag.
+* Live elapsed and remaining media timeline scrubber (`▶ 00:03 ━━━━━ 03:29`).
+* High-resolution artwork thumbnail preview in Discord.
+* *(Easily toggled on/off or customized in Settings).*
 
 ### 👥 Multiple Profiles & Personalization
 * Create separate profiles for family members or roommates.
@@ -70,6 +80,11 @@ Broadcasting what you're watching straight to your Discord profile:
 ## 📸 Interface Tour
 
 <div align="center">
+
+### 🌐 Watch Online (YouTube Search & Stream)
+<img src="screenshots/online.png" width="95%" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);" />
+
+<br/><br/>
 
 | Season & Episode Modal | Multi-Profile Selector |
 | :---: | :---: |
@@ -86,15 +101,10 @@ Broadcasting what you're watching straight to your Discord profile:
 ## 📥 Installation
 
 ### Windows Installer (Recommended)
-Download and run [**Kudflix Setup 1.4.8.exe**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.8/Kudflix.Setup.1.4.8.exe). Desktop and Start Menu shortcuts will be created automatically.
+Download and run [**Kudflix Setup 1.4.9.exe**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.9/Kudflix.Setup.1.4.9.exe). Desktop and Start Menu shortcuts will be created automatically.
 
 ### Portable Mode (Run from USB / External Drive)
-Download [**Kudflix-1.4.8-win.zip**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.8/Kudflix-1.4.8-win.zip), extract it anywhere, and launch `Kudflix.exe`. No installation, registry entries, or admin privileges needed.
-
-### Windows Package Manager (`winget`)
-```cmd
-winget install NekoIsUnavailable.Kudflix
-```
+Download [**Kudflix-1.4.9-win.zip**](https://github.com/NekoIsUnavailable/Kudflix/releases/download/v1.4.9/Kudflix-1.4.9-win.zip), extract it anywhere, and launch `Kudflix.exe`. No installation, registry entries, or admin privileges needed.
 
 ---
 
@@ -141,7 +151,7 @@ Kudflix is built to be flexible and parses almost all release formats, but organ
 git clone https://github.com/NekoIsUnavailable/Kudflix.git
 cd Kudflix
 
-# 2. Install dependencies & fetch MPV binaries
+# 2. Install dependencies & fetch MPV/yt-dlp binaries
 npm install
 npm run setup-mpv
 
@@ -157,7 +167,8 @@ npm run package
 ## 🗺️ Roadmap
 
 - [x] Universal MPV audio playback (AC-3, E-AC-3, DTS)
-- [x] Discord Rich Presence integration
+- [x] Enhanced Discord Rich Presence with media timeline scrubber & thumbnails
+- [x] Watch Online section (YouTube search & stream without API keys)
 - [x] Portable `.zip` release target
 - [x] Multi-folder library separation (Movie vs TV roots)
 - [ ] Steam Deck / Linux AppImage build
@@ -182,9 +193,16 @@ Contributions, issues, and feature requests are welcome!
 
 * **Kudflix** created and maintained by [**NekoIsUnavailable**](https://github.com/NekoIsUnavailable).
 * **Player Overhaul & Core Contributions:** Huge thanks to [**LeRubix**](https://github.com/LeRubix) ([Rubflix](https://github.com/LeRubix/Rubflix)) for contributing the MPV player engine architecture, multi-folder library sync, and UI fixes.
-* Playback backend powered by [**mpv**](https://github.com/mpv-player/mpv) under [LGPL-2.1](https://github.com/mpv-player/mpv).
+* Playback backend powered by [**mpv**](https://github.com/mpv-player/mpv) under [LGPL-2.1](https://github.com/mpv-player/mpv) and [**yt-dlp**](https://github.com/yt-dlp/yt-dlp) under [Unlicense](https://github.com/yt-dlp/yt-dlp).
 * Metadata and cover posters provided by [**The Movie Database (TMDB)**](https://www.themoviedb.org).
 
+---
+
 <div align="center">
-  <sub>If you enjoy Kudflix, consider leaving a ⭐ on GitHub! It helps more people discover the project.</sub>
+
+### 🔍 Related Keywords & Search Terms
+`netflix-clone` · `media-player` · `offline-streaming` · `mpv-player` · `ytfzf` · `yt-dlp` · `youtube-player` · `desktop-app` · `discord-rpc` · `anime-player` · `local-streaming` · `video-player` · `electron-app`
+
+<sub>If you enjoy Kudflix, consider leaving a ⭐ on GitHub! It helps more people discover the project.</sub>
+
 </div>

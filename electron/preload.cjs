@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setDiscordRpcEnabled: (enabled) => ipcRenderer.invoke('discord-rpc-set-enabled', enabled),
   setDiscordRpcClientId: (id) => ipcRenderer.invoke('discord-rpc-set-client-id', id),
   setDiscordRpcActivityStyle: (style) => ipcRenderer.invoke('discord-rpc-set-activity-style', style),
+  searchOnline: (query) => ipcRenderer.invoke('online-search', query),
 
   // Library window
   playerStart: (session) => ipcRenderer.invoke('player-start', session),

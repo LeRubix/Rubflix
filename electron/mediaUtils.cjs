@@ -41,6 +41,9 @@ function runFfprobe(args) {
 }
 
 async function probeMediaDuration(videoPath) {
+  if (!videoPath || typeof videoPath !== 'string' || videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+    return null;
+  }
   const stdout = await runFfprobe([
     '-v', 'error',
     '-show_entries', 'format=duration',
@@ -54,6 +57,9 @@ async function probeMediaDuration(videoPath) {
 }
 
 async function probeMediaAudio(videoPath) {
+  if (!videoPath || typeof videoPath !== 'string' || videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+    return { audioCodec: null, hasAudio: true };
+  }
   const stdout = await runFfprobe([
     '-v', 'error',
     '-select_streams', 'a:0',
@@ -67,6 +73,9 @@ async function probeMediaAudio(videoPath) {
 }
 
 async function probeTracks(videoPath) {
+  if (!videoPath || typeof videoPath !== 'string' || videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+    return { audio: [], subtitles: [] };
+  }
   const stdout = await runFfprobe([
     '-v', 'error',
     '-show_entries', 'stream=index,codec_type,codec_name:stream_tags=language,title',
@@ -127,6 +136,9 @@ function formatTrackLabel(type, stream, order) {
 }
 
 function findSubtitleFiles(videoPath) {
+  if (!videoPath || typeof videoPath !== 'string' || videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+    return [];
+  }
   const dir = path.dirname(videoPath);
   const base = path.basename(videoPath, path.extname(videoPath));
 
