@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="public/icon.png" alt="Kudflix Logo" width="128" style="border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);" />
+
 # 🍿 Kudflix
 
 ### *Your local videos & YouTube streams. Netflix aesthetics. Zero servers.*

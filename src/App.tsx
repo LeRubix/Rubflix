@@ -825,7 +825,10 @@ export default function App() {
               style={{ WebkitAppRegion: 'drag', zoom: 1.15 } as any}
             >
               <div className="flex items-center gap-8" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                <h1 className="text-accent font-black text-2xl tracking-tighter pointer-events-auto shadow-black drop-shadow-md">{settings.appName}</h1>
+                <div className="flex items-center gap-2.5 pointer-events-auto">
+                  <img src="/icon.png" alt="Logo" className="w-7 h-7 rounded-md object-cover shadow-sm drop-shadow-md" />
+                  <h1 className="text-accent font-black text-2xl tracking-tighter shadow-black drop-shadow-md">{settings.appName}</h1>
+                </div>
                 <ul className="hidden md:flex gap-5 text-sm font-semibold text-gray-200 pointer-events-auto">
                   <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('home'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'home' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>Home</li>
                   <li onClick={() => { setShowSearch(false); setShowHistory(false); setActiveTab('tv'); }} className={`drop-shadow-md cursor-pointer transition ${activeTab === 'tv' && !showSearch && !showHistory ? 'text-white' : 'hover:text-gray-300'}`}>TV Shows</li>
