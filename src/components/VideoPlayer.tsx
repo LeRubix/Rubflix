@@ -6,11 +6,16 @@ import { usePlayerIdle } from '../hooks/usePlayerIdle';
 import { usePlayerKeyboard } from '../hooks/usePlayerKeyboard';
 import {
   getSubtitlePref, saveSubtitlePref, getAudioPref, saveAudioPref,
-  loadPlayerVolume, savePlayerVolume, saveProgress, samePath,
+  loadPlayerVolumeForNewSession,
+  savePlayerVolume,
+  clampPlayerVolume,
+  snapPlayerVolume,
+  saveProgress,
+  samePath,
   loadSubtitleStyle, saveSubtitleStyle, subtitleStyleToMpv, type SubtitleStyle,
 } from '../utils/subtitles';
 
-const NEXT_EPISODE_WINDOW_S = 20;
+import { resolveOutroWindowSeconds } from '../utils/showSkip';
 const PROGRESS_SAVE_MS = 5000;
 
 const INITIAL_STATE: PlayerState = {
@@ -34,7 +39,7 @@ type Flash = { kind: 'play' | 'pause' | 'back' | 'forward'; key: number } | null
 export function VideoPlayer({ session }: { session: PlayerSession }) {
   const api = window.electronAPI;
   const [state, setState] = useState<PlayerState>(INITIAL_STATE);
-  const [{ volume, muted }, setVolumeState] = useState(loadPlayerVolume);
+  const [{ volume, muted }, setVolumeState] = useState(loadPlayerVolumeForNewSession);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [openPanel, setOpenPanel] = useState<PlayerPanel>(null);
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(loadSubtitleStyle);
@@ -79,7 +84,8 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
         externalSubsRef.current = external;
 
         const subPref = getSubtitlePref(session.profileId, session.path);
-        const { volume: vol, muted: mute } = loadPlayerVolume();
+        const { volume: vol, muted: mute } = loadPlayerVolumeForNewSession();
+        setVolumeState({ volume: vol, muted: mute });
 
         const style = loadSubtitleStyle();
         const options: PlayerOpenOptions = {
@@ -113,6 +119,11 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
       persistProgress();
     };
   }, [api, session.path, session.profileId, session.startTime, persistProgress]);
+
+  useEffect(() => {
+    setNextDismissed(false);
+    requestedNext.current = false;
+  }, [session.path]);
 
   useEffect(() => api.onPlayerState(setState), [api]);
   useEffect(() => api.onPlayerFullscreen(setIsFullscreen), [api]);
@@ -186,8 +197,12 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
 
   const seekTo = useCallback((time: number) => { cmd('seek-absolute', time); }, [cmd]);
 
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
   const setVolume = useCallback((next: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(next)));
+    const snapped = snapPlayerVolume(next, volumeRef.current);
+    const clamped = clampPlayerVolume(snapped);
     setVolumeState({ volume: clamped, muted: false });
     savePlayerVolume(clamped, false);
     cmd('volume', clamped);
@@ -303,12 +318,12 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     toggleFullscreen();
   };
 
+  const outroWindow = resolveOutroWindowSeconds(session.outroSkipSeconds ?? 0);
   const remaining = state.duration - state.timePos;
   const showNextCard = Boolean(
-    session.next && !nextDismissed && state.loaded && state.duration > 120 &&
-    remaining <= NEXT_EPISODE_WINDOW_S,
+    session.next && !nextDismissed && state.loaded && state.duration > outroWindow + 30 &&
+    remaining <= outroWindow,
   );
-
   useEffect(() => {
     if (state.eof && session.next && !nextDismissed) playNext();
   }, [state.eof, session.next, nextDismissed, playNext]);
@@ -415,7 +430,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
             >
               <span
                 className="absolute inset-y-0 left-0 bg-white transition-[width] duration-300 ease-linear"
-                style={{ width: `${Math.min(100, Math.max(0, ((NEXT_EPISODE_WINDOW_S - remaining) / NEXT_EPISODE_WINDOW_S) * 100))}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, ((outroWindow - remaining) / outroWindow) * 100))}%` }}
               />
               <Play className="relative w-5 h-5 fill-black" />
               <span className="relative">Next Episode</span>

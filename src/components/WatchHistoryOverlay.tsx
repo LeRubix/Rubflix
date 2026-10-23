@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { History, Play, Info, X, Trash2, Plus, Pencil, Check } from 'lucide-react';
+import { History, Play, Info, X, Trash2, Plus, Pencil, Check, FolderX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LocalFile } from './NetflixUI';
 import { useWatchHistory } from '../hooks/useWatchHistory';
@@ -136,8 +136,17 @@ function HistoryRow({
             </span>
           )}
           {!inLibrary && (
-            <span className="text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded bg-gray-600/40 text-gray-400">
-              Not in library
+            <span
+              className="group/missing inline-flex items-center max-w-[1.5rem] hover:max-w-[12rem] overflow-hidden rounded bg-gray-600/40 text-gray-400 shrink-0 transition-[max-width] duration-200 ease-out"
+              title="Not found in library"
+              aria-label="Not found in library"
+            >
+              <span className="inline-flex items-center justify-center w-6 h-6 shrink-0">
+                <FolderX className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </span>
+              <span className="pr-2 text-[10px] font-semibold text-gray-300 whitespace-nowrap opacity-0 group-hover/missing:opacity-100 transition-opacity duration-150 delay-75">
+                Not found in library
+              </span>
             </span>
           )}
         </div>

@@ -21,6 +21,7 @@ import { resolveFileMeta } from './utils/metadata';
 import { getPlayerDisplayTitle } from './utils/displayTitle';
 import { getAdjacentEpisodes } from './utils/episodeNavigation';
 import { resolveEpisodeNumbers, parseEpisodeFromText } from './utils/episodeParsing';
+import { getShowSkipSettings } from './utils/showSkip';
 import { loadSettings, saveSettings } from './utils/settings';
 import { StartupScreen } from './components/StartupScreen';
 import { ProfilesScreen } from './components/ProfilesScreen';
@@ -452,6 +453,7 @@ export default function App() {
     if (video.duration && startTime > video.duration - 30) startTime = 0;
     const allKnown = filesRef.current.length > 0 ? filesRef.current : files;
     const { prev, next } = getAdjacentEpisodes(allKnown, video);
+    const { outroSkipSeconds } = getShowSkipSettings(video);
 
     const resolveOnlineImage = (target?: LocalFile): string | undefined => {
       if (!target) return undefined;
@@ -484,6 +486,7 @@ export default function App() {
       thumbnail: onlineThumbnail,
       profileId: activeProfile,
       startTime,
+      outroSkipSeconds: outroSkipSeconds > 0 ? outroSkipSeconds : undefined,
       prev: prev
         ? {
             path: prev.path,
@@ -1114,6 +1117,7 @@ export default function App() {
                 onInfo={handleOpenInfo}
                 progresses={progresses}
                 expandable
+                mediaType="movie"
                 activeProfileId={activeProfile}
                 watchedIndicatorMode={settings.watchedIndicatorMode}
               />
@@ -1128,6 +1132,7 @@ export default function App() {
                 onInfo={handleOpenInfo}
                 progresses={progresses}
                 expandable
+                mediaType="tv"
                 activeProfileId={activeProfile}
                 watchedIndicatorMode={settings.watchedIndicatorMode}
               />
@@ -1201,6 +1206,9 @@ export default function App() {
           progresses={progresses}
           activeProfileId={activeProfile}
           watchedIndicatorMode={settings.watchedIndicatorMode}
+          initialMediaType={
+            activeTab === 'movies' ? 'movie' : activeTab === 'tv' ? 'tv' : 'all'
+          }
         />
       )}
 
