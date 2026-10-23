@@ -400,6 +400,11 @@ class MpvController {
         // CLI --start can leave embedded video (wid) stuck on a still frame until a seek;
         // re-seek after load refreshes decoding and A/V sync.
         await this.command(['seek', resume, 'absolute+exact']);
+      } else {
+        const pos = await this.getProperty('time-pos').catch(() => 0);
+        if (typeof pos === 'number' && pos > 2) {
+          await this.command(['seek', 0, 'absolute+exact']);
+        }
       }
       await this.setProperty('pause', false);
     } catch (err) {

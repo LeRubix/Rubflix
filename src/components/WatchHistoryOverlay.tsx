@@ -3,7 +3,7 @@ import { History, Play, Info, X, Trash2, Plus, Pencil, Check, FolderX } from 'lu
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LocalFile } from './NetflixUI';
 import { useWatchHistory } from '../hooks/useWatchHistory';
-import { clearWatchHistory, updateWatchHistoryWatchedAt, type WatchHistoryEntry } from '../utils/watchHistory';
+import { clearWatchHistory, removeWatchHistoryEntry, updateWatchHistoryWatchedAt, type WatchHistoryEntry } from '../utils/watchHistory';
 import { WatchHistoryImportPanel } from './WatchHistoryImportPanel';
 import { getWatchHistoryThumb } from '../utils/thumbnailCache';
 import { formatDurationShort } from '../utils/subtitles';
@@ -121,7 +121,7 @@ function HistoryRow({
   const genreLabel = formatHistoryGenre(entry.genre, entry.mediaType);
 
   return (
-    <div className="flex gap-4 md:gap-6 py-4 border-b border-gray-800/80 last:border-0">
+    <div className="group/row flex gap-4 md:gap-6 py-4 border-b border-gray-800/80 last:border-0">
       <HistoryThumb entry={entry} liveFile={liveFile} />
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -214,6 +214,18 @@ function HistoryRow({
           </div>
         )}
       </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          void removeWatchHistoryEntry(profileId, entry.id);
+        }}
+        className="self-center shrink-0 p-2 rounded-lg text-gray-500 opacity-0 group-hover/row:opacity-100 hover:text-red-400 hover:bg-white/10 transition"
+        aria-label="Remove from history"
+        title="Remove from history"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 }

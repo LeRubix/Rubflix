@@ -55,6 +55,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
   const audioReconciledPath = useRef<string | null>(null);
   const requestedNext = useRef(false);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedPathRef = useRef<string | null>(null);
 
   const error = openError ?? state.error;
   const keepVisible = state.pause || openPanel !== null || scrubbing || !state.loaded || Boolean(error);
@@ -63,8 +64,11 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
   const cmd = useCallback((action: string, value?: unknown) => api.playerCommand(action, value), [api]);
 
   const persistProgress = useCallback(() => {
-    const { timePos } = stateRef.current;
-    if (timePos > 0) saveProgress(session.profileId, session.path, timePos);
+    const path = loadedPathRef.current;
+    if (!path || path !== session.path) return;
+    const { timePos, loaded } = stateRef.current;
+    if (!loaded || timePos <= 0) return;
+    saveProgress(session.profileId, path, timePos);
   }, [session.profileId, session.path]);
 
   // Open the file once per session path
@@ -73,6 +77,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
     subsInitialized.current = false;
     audioReconciledPath.current = null;
     requestedNext.current = false;
+    loadedPathRef.current = null;
     setOpenError(null);
 
     (async () => {
@@ -104,8 +109,9 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
         if (cancelled) return;
         if (!result.ok) {
           setOpenError(result.error || 'Could not start playback.');
-        } else if (result.state) {
-          setState(result.state);
+        } else {
+          loadedPathRef.current = session.path;
+          if (result.state) setState(result.state);
         }
       } catch (err: any) {
         if (cancelled) return;
@@ -448,7 +454,7 @@ export function VideoPlayer({ session }: { session: PlayerSession }) {
               onClick={exitPlayer}
               className="inline-flex items-center gap-2 bg-white text-black px-7 py-3 rounded font-bold hover:bg-white/80 transition"
             >
-              <ArrowLeft className="w-5 h-5" /> Back to Browse
+              <ArrowLeft className="w-5 h-5" /> Back
             </button>
           </div>
         </div>

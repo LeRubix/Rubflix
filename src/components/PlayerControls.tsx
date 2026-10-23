@@ -361,7 +361,7 @@ export function PlayerControls(props: PlayerControlsProps) {
       <div className="absolute top-0 left-0 p-6 md:px-10 pointer-events-auto" onClick={stop} onDoubleClick={stop}>
         <button
           onClick={onBack}
-          aria-label="Back to browse"
+          aria-label="Back"
           className="text-white transition-transform duration-150 hover:scale-125"
         >
           <ArrowLeft className="w-10 h-10" strokeWidth={2} />

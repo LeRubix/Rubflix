@@ -1,19 +1,19 @@
 import type { LocalFile } from '../components/NetflixUI';
-import { getSeriesRoot } from './grouping';
+import { getSeriesRootFromFile } from './grouping';
 import { getMediaOverride } from './mediaOverrides';
 
 export const DEFAULT_OUTRO_WINDOW_SECONDS = 20;
 
 export function seriesOverridePathForVideo(
-  video: Pick<LocalFile, 'path' | 'isFolder' | 'relativePath'>,
+  video: Pick<LocalFile, 'path' | 'isFolder' | 'relativePath' | 'folderName'>,
 ): string | null {
   if (video.isFolder) return video.path;
-  const root = getSeriesRoot(video.relativePath);
+  const root = getSeriesRootFromFile(video);
   return root ? `folder://${root}` : null;
 }
 
 export function getShowSkipSettings(
-  video: Pick<LocalFile, 'path' | 'isFolder' | 'relativePath'>,
+  video: Pick<LocalFile, 'path' | 'isFolder' | 'relativePath' | 'folderName'>,
 ): { outroSkipSeconds: number } {
   const key = seriesOverridePathForVideo(video);
   const override = key ? getMediaOverride(key) : undefined;
